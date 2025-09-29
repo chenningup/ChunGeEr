@@ -6,13 +6,42 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(COMMON_LIBRARIES
+    windowsapp
+    d3d11
+    dxgi
+    dwmapi
+    user32
+    gdi32
+)
+set(COMMON_DEFINITIONS
+    _WINRT_MESSAGES
+    WINRT_LEAN_AND_MEAN
+)
+set(COMMON_OPTIONS
+    "/await"
+    "/EHsc"
+)
+
+add_library(ScreenCapture STATIC
+    ${CMAKE_SOURCE_DIR}/../ScreenCapture/pch.cpp
+    ${CMAKE_SOURCE_DIR}/../ScreenCapture/pch.h
+    ${CMAKE_SOURCE_DIR}/../ScreenCapture/ScreenCapture.h
+    ${CMAKE_SOURCE_DIR}/../ScreenCapture/ScreenCapture.cpp
+)
+
+target_link_libraries(ScreenCapture PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Gui)
+
+
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
 include_directories(${CMAKE_SOURCE_DIR}/../include)
+include_directories(${CMAKE_SOURCE_DIR}/../ScreenCapture/)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Debug)
@@ -51,7 +80,7 @@ else()
     endif()
 endif()
 
-target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0)
+target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0 ScreenCapture)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

@@ -116,7 +116,7 @@ namespace ScreenCaptureCore
     ErrorCode ScreenCapture::CaptureToFile(const QString& outputPath)
     {
         // Default: hide border and cursor for cleaner capture
-        return CaptureToFile(outputPath, true, true);
+        return CaptureToFile(outputPath, false, false);
     }
 
     ErrorCode ScreenCapture::CaptureToFile(const QString& outputPath, bool hideBorder, bool hideCursor)
@@ -160,12 +160,13 @@ namespace ScreenCaptureCore
 
             if (hideBorder)
             {
-                try
+                if (auto session3 = session.try_as<winrt::Windows::Graphics::Capture::IGraphicsCaptureSession3>())
                 {
-                    session.IsBorderRequired(false);
+                    session3.IsBorderRequired(false);
                 }
-                catch (...)
+                else
                 {
+                    // 在 Win10 上这里不会报错，只是接口不存在，不做任何处理
                 }
             }
 
@@ -224,10 +225,11 @@ namespace ScreenCaptureCore
                         QImage img((const uchar*)mappedResource.pData,desc.Width,desc.Height,mappedResource.RowPitch,QImage::Format_ARGB32);
 
                         // D3D11 输出通常是 BGRA8，所以要做通道交换
-                        QImage converted = img.rgbSwapped();
+                        img.save("123123123123123.bmp");
+                        //QImage converted = img.rgbSwapped();
 
                         // 保存为 PNG
-                        bool ok = converted.save(outputPath, "PNG");
+                        bool ok = img.save(outputPath);
                         if (!ok) {
                             //qWarning() << "Failed to save screenshot to" << outputPath;
                         }

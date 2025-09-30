@@ -225,7 +225,7 @@ namespace ScreenCaptureCore
                         QImage img((const uchar*)mappedResource.pData,desc.Width,desc.Height,mappedResource.RowPitch,QImage::Format_ARGB32);
 
                         // D3D11 输出通常是 BGRA8，所以要做通道交换
-                        img.save("123123123123123.bmp");
+                        //img.save("123123123123123.bmp");
                         //QImage converted = img.rgbSwapped();
 
                         // 保存为 PNG

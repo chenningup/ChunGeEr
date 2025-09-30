@@ -80,7 +80,14 @@ else()
     endif()
 endif()
 
-target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0 ScreenCapture)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # Debug 配置
+    target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0 ScreenCapture opencv_core490d opencv_calib3d490d opencv_imgcodecs490d)
+else()
+    # Release 配置
+    link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)
+endif()
+
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

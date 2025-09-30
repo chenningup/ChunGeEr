@@ -82,7 +82,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug 配置
-    target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0 ScreenCapture opencv_core490d opencv_calib3d490d opencv_imgcodecs490d)
+    target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0 ScreenCapture opencv_core490d opencv_calib3d490d opencv_imgcodecs490d opencv_imgproc490d opencv_highgui490d)
 else()
     # Release 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)

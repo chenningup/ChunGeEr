@@ -1,8 +1,10 @@
 # Ignore build directories
 build-*/
-
+build/
 # Ignore Qt temporary files
 *.pro.user
 *.pro.user.*
 *.qmake.stash
 ./vscode
+.vs
+CMakeLists.txt.user*

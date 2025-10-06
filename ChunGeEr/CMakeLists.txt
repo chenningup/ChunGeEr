@@ -38,7 +38,7 @@ target_link_libraries(ScreenCapture PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_V
 
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets SerialPort)
 
 include_directories(${CMAKE_SOURCE_DIR}/../include)
 include_directories(${CMAKE_SOURCE_DIR}/../ScreenCapture/)
@@ -58,9 +58,14 @@ set(PROJECT_SOURCES
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+    find_package(Qt6 REQUIRED COMPONENTS Core)
+    find_package(Qt6 REQUIRED COMPONENTS Core)
     qt_add_executable(ChunGeEr
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        screencapturemanager.h screencapturemanager.cpp
+        storagevidoemanager.cpp storagevidoemanager.h
+        mousekeyboardmanager.h mousekeyboardmanager.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET ChunGeEr APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -82,7 +87,26 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug 配置
-    target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets tesseract55d org.sw.demo.danbloomberg.leptonica-1.85.0 ScreenCapture opencv_core490d opencv_calib3d490d opencv_imgcodecs490d opencv_imgproc490d opencv_highgui490d)
+    target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::SerialPort
+        tesseract55d
+        org.sw.demo.danbloomberg.leptonica-1.85.0
+        ScreenCapture
+        opencv_core490d
+        opencv_calib3d490d
+        opencv_imgcodecs490d
+        opencv_imgproc490d
+        opencv_highgui490d
+        hv
+        windowsapp
+        avcodec
+        avdevice
+        avfilter
+        avutil
+        swresample
+        swscale
+        avformat)
 else()
     # Release 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)

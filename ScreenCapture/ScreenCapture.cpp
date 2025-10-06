@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <QFile>
 #include <QImage>
+#include <QDateTime>
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Graphics::Capture;
@@ -124,7 +125,7 @@ namespace ScreenCaptureCore
         return InternalCapture(outputPath, hideBorder, hideCursor);
     }
 
-    ErrorCode ScreenCapture::CaptureToMemory(std::vector<uint8_t>& outputBuffer, bool hideBorder, bool hideCursor)
+    ErrorCode ScreenCapture::CaptureToMemory(ScreenData &outputBuffer, bool hideBorder, bool hideCursor)
     {
         return InternalCaptureToMemory(outputBuffer, hideBorder, hideCursor);
     }
@@ -133,14 +134,17 @@ namespace ScreenCaptureCore
     {
         try
         {
-
+            QDateTime time = QDateTime::currentDateTime();
+            qDebug()<<"1"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
             // 1. Create D3D11 Device
             auto d3d11Device = CreateD3DDevice();
             auto direct3DDevice = CreateDirect3DDeviceFromD3D11Device(d3d11Device);
-
+            time = QDateTime::currentDateTime();
+            qDebug()<<"2"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
             // 2. Create capture item for primary monitor
             auto captureItem = CreateCaptureItemForMonitor();
-
+            time = QDateTime::currentDateTime();
+            qDebug()<<"3"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
             // 3. Create Direct3D11CaptureFramePool
             auto framePool = Direct3D11CaptureFramePool::Create(
                 direct3DDevice,
@@ -148,10 +152,12 @@ namespace ScreenCaptureCore
                 1,
                 captureItem.Size()
             );
-
+            time = QDateTime::currentDateTime();
+            qDebug()<<"3"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
             // 4. Create capture session
             auto session = framePool.CreateCaptureSession(captureItem);
-
+            time = QDateTime::currentDateTime();
+            qDebug()<<"3"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
             // 5. Configure capture session options
             if (hideCursor)
             {
@@ -179,7 +185,8 @@ namespace ScreenCaptureCore
 
             framePool.FrameArrived([&](auto const& sender, auto const& args)
             {
-
+                time = QDateTime::currentDateTime();
+                qDebug()<<"3"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
                 auto frame = sender.TryGetNextFrame();
                 if (frame)
                 {
@@ -321,12 +328,15 @@ namespace ScreenCaptureCore
                winrt::com_ptr<ID3D11Device>> SetupCaptureSession(bool hideBorder, bool hideCursor)
     {
         // 1. Create D3D11 Device
+		QDateTime time = QDateTime::currentDateTime();
+        qDebug()<<"1"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         auto d3d11Device = CreateD3DDevice();
         auto direct3DDevice = CreateDirect3DDeviceFromD3D11Device(d3d11Device);
 
         // 2. Create capture item for primary monitor
         auto captureItem = CreateCaptureItemForMonitor();
-
+		time = QDateTime::currentDateTime();
+        qDebug()<<"2"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         // 3. Create Direct3D11CaptureFramePool
         auto framePool = Direct3D11CaptureFramePool::Create(
             direct3DDevice,
@@ -334,10 +344,12 @@ namespace ScreenCaptureCore
             1,
             captureItem.Size()
         );
-
+		time = QDateTime::currentDateTime();
+        qDebug()<<"3"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         // 4. Create capture session
         auto session = framePool.CreateCaptureSession(captureItem);
-
+		time = QDateTime::currentDateTime();
+        qDebug()<<"4"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         // 5. Configure capture session options
         if (hideCursor)
         {
@@ -359,7 +371,7 @@ namespace ScreenCaptureCore
         return std::make_tuple(session, framePool, d3d11Device);
     }
 
-    ErrorCode ScreenCapture::InternalCaptureToMemory(std::vector<uint8_t>& outputBuffer, bool hideBorder, bool hideCursor)
+    ErrorCode ScreenCapture::InternalCaptureToMemory(ScreenData &outputBuffer, bool hideBorder, bool hideCursor)
     {
         try
         {
@@ -371,11 +383,13 @@ namespace ScreenCaptureCore
             bool captureSuccess = false;
             std::mutex frameMutex;
             std::condition_variable frameCondition;
-
+			QDateTime time = QDateTime::currentDateTime();
+			qDebug()<<"4"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
 
             framePool.FrameArrived([&](auto const& sender, auto const& args)
             {
-
+			QDateTime time = QDateTime::currentDateTime();
+			qDebug()<<"5"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
                 auto frame = sender.TryGetNextFrame();
                 if (frame)
                 {
@@ -416,43 +430,13 @@ namespace ScreenCaptureCore
 
                         // Create bitmap data
                         uint32_t dataSize = mappedResource.RowPitch * desc.Height;
-                        std::vector<uint8_t> bitmapData(dataSize);
-                        memcpy(bitmapData.data(), mappedResource.pData, dataSize);
-
+                        std::shared_ptr<std::vector<uint8_t>> buffer = std::make_shared<std::vector<uint8_t>>(dataSize);
+                        memcpy(buffer->data(), mappedResource.pData, dataSize);
+                        outputBuffer.data = buffer;
+                        outputBuffer.RowPitch = mappedResource.RowPitch;
+                        outputBuffer.des = desc;
                         context->Unmap(stagingTexture.get(), 0);
-
-                        // Encode to PNG in memory
-                        try
-                        {
-                            InMemoryRandomAccessStream stream;
-                            BitmapEncoder encoder = BitmapEncoder::CreateAsync(BitmapEncoder::PngEncoderId(), stream).get();
-
-                            encoder.SetPixelData(
-                                BitmapPixelFormat::Bgra8,
-                                BitmapAlphaMode::Ignore,
-                                desc.Width,
-                                desc.Height,
-                                96.0,
-                                96.0,
-                                bitmapData
-                            );
-
-                            encoder.FlushAsync().get();
-
-                            // Read stream into output buffer
-                            auto reader = DataReader(stream.GetInputStreamAt(0));
-                            auto bytesToRead = static_cast<uint32_t>(stream.Size());
-                            reader.LoadAsync(bytesToRead).get();
-
-                            outputBuffer.resize(bytesToRead);
-                            reader.ReadBytes(winrt::array_view<uint8_t>(outputBuffer));
-
-                            captureSuccess = true;
-                        }
-                        catch (...)
-                        {
-                        }
-
+                        captureSuccess = true;
                         // Signal completion
                         {
                             std::lock_guard<std::mutex> lock(frameMutex);

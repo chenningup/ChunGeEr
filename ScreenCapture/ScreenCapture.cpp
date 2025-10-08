@@ -23,7 +23,7 @@ using namespace winrt::Windows::Storage::Streams;
 namespace ScreenCaptureCore
 {
     // Helper function to create D3D11 device
-    com_ptr<ID3D11Device> CreateD3DDevice()
+    com_ptr<ID3D11Device> ScreenCapture::CreateD3DDevice()
     {
         UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
@@ -66,7 +66,7 @@ namespace ScreenCaptureCore
     }
 
     // Helper function to create Direct3D11Device from ID3D11Device
-    IDirect3DDevice CreateDirect3DDeviceFromD3D11Device(const com_ptr<ID3D11Device>& d3d11Device)
+    IDirect3DDevice ScreenCapture:: CreateDirect3DDeviceFromD3D11Device(const com_ptr<ID3D11Device>& d3d11Device)
     {
         com_ptr<IDXGIDevice> dxgiDevice;
         winrt::check_hresult(d3d11Device->QueryInterface(dxgiDevice.put()));
@@ -78,7 +78,7 @@ namespace ScreenCaptureCore
     }
 
     // Helper function to create GraphicsCaptureItem for primary monitor
-    GraphicsCaptureItem CreateCaptureItemForMonitor()
+    GraphicsCaptureItem ScreenCapture::CreateCaptureItemForMonitor()
     {
         auto factory = winrt::get_activation_factory<GraphicsCaptureItem>();
         auto interop = factory.as<IGraphicsCaptureItemInterop>();
@@ -330,11 +330,11 @@ namespace ScreenCaptureCore
         // 1. Create D3D11 Device
 		QDateTime time = QDateTime::currentDateTime();
         qDebug()<<"1"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-        auto d3d11Device = CreateD3DDevice();
-        auto direct3DDevice = CreateDirect3DDeviceFromD3D11Device(d3d11Device);
+        auto d3d11Device = ScreenCapture::CreateD3DDevice();
+        auto direct3DDevice = ScreenCapture::CreateDirect3DDeviceFromD3D11Device(d3d11Device);
 
         // 2. Create capture item for primary monitor
-        auto captureItem = CreateCaptureItemForMonitor();
+        auto captureItem = ScreenCapture::CreateCaptureItemForMonitor();
 		time = QDateTime::currentDateTime();
         qDebug()<<"2"<<time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         // 3. Create Direct3D11CaptureFramePool

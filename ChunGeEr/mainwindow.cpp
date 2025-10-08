@@ -21,7 +21,7 @@ MainWindow::MainWindow(QWidget *parent)
     wsClient.onmessage = std::bind(&MainWindow::receiveFromServer , this,std::placeholders::_1);
     wsClient.onclose = std::bind(&MainWindow::closeFromServer, this);
 
-    qRegisterMetaType<ScreenData>("ScreenData");
+    qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
     StorageVidoeManager::Instance().init();
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
@@ -113,6 +113,7 @@ void MainWindow::on_clickPushButton_clicked()
             websocket_server_stop(&server);
             clickedButton->setText("开始");
             ScreenCaptureManager::Instance().stopCapture();
+            StorageVidoeManager::Instance().stopSaveVideo();
         }
     }
     else
@@ -133,6 +134,7 @@ void MainWindow::on_clickPushButton_clicked()
             wsClient.close();
             clickedButton->setText("开始");
             ScreenCaptureManager::Instance().stopCapture();
+            StorageVidoeManager::Instance().stopSaveVideo();
         }
     }
 }

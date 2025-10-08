@@ -11,9 +11,9 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libswscale/swscale.h>
+#include <libavutil/hwcontext.h>
 }
 #include "screencapturemanager.h"
-using namespace ScreenCaptureCore;
 class StorageVidoeManager : public QThread
 {
     Q_OBJECT
@@ -30,17 +30,18 @@ public:
 signals:
 
 public slots:
-    void receiveCaptureScreen(ScreenCaptureCore::ScreenData data);
+    void receiveCaptureScreen(ScreenCaptureManager::ScreenData data);
 private:
     QSemaphore mScreenSem;
     QMutex mScreenMutex;
-    QList<ScreenData>mScreenList;
+    QList<ScreenCaptureManager::ScreenData>mScreenList;
     bool isSaving;
 
     AVFormatContext* m_formatContext = nullptr;
     AVCodecContext* m_codecContext = nullptr;
     AVStream* m_stream = nullptr;
     SwsContext* m_swsContext = nullptr;
+    AVBufferRef* hw_device_ctx = nullptr;
 };
 
 

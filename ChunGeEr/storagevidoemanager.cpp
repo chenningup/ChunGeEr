@@ -52,7 +52,7 @@ void StorageVidoeManager::init()
     m_swsContext = sws_getContext(1920, 1080, AV_PIX_FMT_BGRA,
                                   1920, 1080, AV_PIX_FMT_YUV420P,
                                   SWS_BILINEAR, nullptr, nullptr, nullptr);
-    connect(&ScreenCaptureManager::Instance(),&ScreenCaptureManager::capturedScreen,this,&StorageVidoeManager::receiveCaptureScreen);
+    connect(&ScreenCaptureManager::Instance(),&ScreenCaptureManager::capturedScreen,this,&StorageVidoeManager::receiveCaptureScreen,Qt::QueuedConnection);
 }
 static long m_frameIndex = 0;
 void StorageVidoeManager::run()
@@ -61,7 +61,7 @@ void StorageVidoeManager::run()
     {
         mScreenSem.acquire();
         mScreenMutex.lock();
-        ScreenData tmp;
+        ScreenCaptureManager::ScreenData tmp;
         if(!mScreenList.empty())
         {
             tmp =  mScreenList[0];
@@ -106,9 +106,15 @@ void StorageVidoeManager::run()
                     // 成功接收到编码包，写入文件
                     av_packet_rescale_ts(&packet, m_codecContext->time_base, m_stream->time_base);
                     packet.stream_index = m_stream->index;
-                    av_interleaved_write_frame(m_formatContext, &packet);
+                    int write_ret =  av_interleaved_write_frame(m_formatContext, &packet);
+                    if (write_ret < 0) {
+                        // 处理写入错误：可以打印日志、中断录制等
+                        qDebug() << "Error writing packet to file:" << write_ret;
+                        // 注意：即使写入失败，也需要释放包资源，否则会内存泄漏
+                    }
+                    avio_flush(m_formatContext->pb);
                     av_packet_unref(&packet);
-                     qDebug()<< "write" <<m_frameIndex;
+                    qDebug()<< "write" <<m_frameIndex;
                 }
             }
 
@@ -124,7 +130,36 @@ void StorageVidoeManager::run()
     }
 }
 
-void StorageVidoeManager::receiveCaptureScreen(ScreenCaptureCore::ScreenData data)
+void StorageVidoeManager::stopSaveVideo()
+{
+    isSaving = false;
+    mScreenSem.release(); // 确保线程退出等待
+
+    wait(); // 等待线程结束
+
+    // 关键：写入文件尾
+    if (m_formatContext) {
+        av_write_trailer(m_formatContext);
+    }
+
+    // 按分配顺序逆序释放资源
+    if (m_swsContext) {
+        sws_freeContext(m_swsContext);
+        m_swsContext = nullptr;
+    }
+
+    if (m_codecContext) {
+        avcodec_free_context(&m_codecContext);
+    }
+
+    if (m_formatContext) {
+        avio_closep(&m_formatContext->pb);
+        avformat_free_context(m_formatContext);
+        m_formatContext = nullptr;
+    }
+}
+
+void StorageVidoeManager::receiveCaptureScreen(ScreenCaptureManager::ScreenData data)
 {
     mScreenMutex.lock();
     mScreenList.push_back(data);

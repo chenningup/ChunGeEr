@@ -8,7 +8,6 @@ set(CMAKE_AUTORCC ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(COMMON_LIBRARIES
     windowsapp
     d3d11
@@ -31,6 +30,8 @@ add_library(ScreenCapture STATIC
     ${CMAKE_SOURCE_DIR}/../ScreenCapture/pch.h
     ${CMAKE_SOURCE_DIR}/../ScreenCapture/ScreenCapture.h
     ${CMAKE_SOURCE_DIR}/../ScreenCapture/ScreenCapture.cpp
+    ${CMAKE_SOURCE_DIR}/../ScreenCapture/screencapturemanager.h
+    ${CMAKE_SOURCE_DIR}/../ScreenCapture/screencapturemanager.cpp
 )
 
 target_link_libraries(ScreenCapture PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Gui)
@@ -63,7 +64,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(ChunGeEr
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        screencapturemanager.h screencapturemanager.cpp
         storagevidoemanager.cpp storagevidoemanager.h
         mousekeyboardmanager.h mousekeyboardmanager.cpp
     )

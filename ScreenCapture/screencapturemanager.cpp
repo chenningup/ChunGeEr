@@ -34,7 +34,7 @@ void ScreenCaptureManager::run()
     // 3. Create Direct3D11CaptureFramePool
     auto framePool = Direct3D11CaptureFramePool::Create(direct3DDevice,
                                                         DirectXPixelFormat::B8G8R8A8UIntNormalized,
-                                                        2,
+                                                        1,
                                                         captureItem.Size());
     time = QDateTime::currentDateTime();
     //qDebug() << "3" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");

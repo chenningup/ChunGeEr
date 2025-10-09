@@ -1,6 +1,6 @@
 #ifndef SCREENCAPTUREMANAGER_H
 #define SCREENCAPTUREMANAGER_H
-#include "ScreenCapture.h"
+//#include "ScreenCapture.h"
 #include <QObject>
 #include <QThread>
 #include <QTimer>

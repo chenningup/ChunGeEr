@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QImage>
 #include <QDateTime>
+#include <windows.h>
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Graphics::Capture;

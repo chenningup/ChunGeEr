@@ -15,6 +15,7 @@ public:
 
     void clickButton(const QString &button);
 signals:
+
 private:
     QSerialPort serial;
 };

@@ -1,5 +1,6 @@
 #include "screencapturemanager.h"
 #include <QDateTime>
+#include "ScreenCapture.h"
 ScreenCaptureManager::ScreenCaptureManager(QObject *parent)
     : QThread{parent},isCapture(false)
 {}

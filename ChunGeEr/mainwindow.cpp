@@ -4,85 +4,24 @@
 #include "StorageVidoeManager.h"
 #include "mousekeyboardmanager.h"
 #include "keyboardlistener.h"
-static WebSocketService ws;
-static websocket_server_t server;
-static hv::WebSocketClient wsClient;
+#include "wsmanager.h"
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
     ui->lineEdit->setText("10.8.0.3");
-    server.port = 8888;
-    server.ws = &ws;
-    ws.onopen = std::bind(&MainWindow::connectFromClient, this, std::placeholders::_1,std::placeholders::_2);
-    ws.onmessage = std::bind(&MainWindow::receiveFromClient, this, std::placeholders::_1,std::placeholders::_2);
-    ws.onclose = std::bind(&MainWindow::closeFromClient, this, std::placeholders::_1);
-
-    wsClient.onopen = std::bind(&MainWindow::connectFromServer, this);
-    wsClient.onmessage = std::bind(&MainWindow::receiveFromServer , this,std::placeholders::_1);
-    wsClient.onclose = std::bind(&MainWindow::closeFromServer, this);
-
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
     StorageVidoeManager::Instance().init();
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
+    WsManager::Instance().init();
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
-
-void MainWindow::receiveFromClient(const WebSocketChannelPtr &channel, const std::string &msg)
-{
-    if(msg.empty())
-    {
-        return;
-    }
-    json data = json::parse(msg);
-    qDebug()<<QString::fromStdString(msg);
-}
-
-void MainWindow::connectFromClient(const WebSocketChannelPtr& channel, const HttpRequestPtr& req)
-{
-    clientList.push_back(channel);
-}
-
-void MainWindow::closeFromClient(const WebSocketChannelPtr&channel)
-{
-    for (int i = 0; i < clientList.size(); ++i)
-    {
-        if(clientList[i].get() == channel.get())
-        {
-            clientList.removeAt(i);
-            break;
-        }
-    }
-}
-
-void MainWindow::receiveFromServer(const std::string &msg)
-{
-    if(msg.empty())
-    {
-        return;
-    }
-    json data = json::parse(msg);
-    qDebug()<<QString::fromStdString(msg);
-}
-
-void MainWindow::connectFromServer()
-{
-    //qDebug()<<QString::fromStdString(msg);
-}
-
-void MainWindow::closeFromServer()
-{
-
-}
-
-
-
 
 void MainWindow::on_clientRadioButton_clicked()
 {
@@ -114,20 +53,20 @@ void MainWindow::on_clickPushButton_clicked()
         if (clickedButton->text() == "开始")
         {
             qDebug()<<"run server";
-            //websocket_server_run(&server, 0);
+            WsManager::Instance().startServer();
             clickedButton->setText("结束");
             //ScreenCaptureManager::Instance().startCapture();
            // MouseKeyboardManager::Instance().clickButton("");
-            Keyboardlistener::Instance().startListen();
+           // Keyboardlistener::Instance().startListen();
             // 处理按钮1的逻辑
         }
         else if (clickedButton->text() == "结束")
         {
             qDebug()<<"stop server";
-            websocket_server_stop(&server);
+           // WsManager::Instance().stopServer();
             clickedButton->setText("开始");
-            ScreenCaptureManager::Instance().stopCapture();
-            StorageVidoeManager::Instance().stopSaveVideo();
+//            ScreenCaptureManager::Instance().stopCapture();
+//            StorageVidoeManager::Instance().stopSaveVideo();
         }
     }
     else
@@ -137,18 +76,18 @@ void MainWindow::on_clickPushButton_clicked()
             qDebug()<<"run server";
             QString ip = ui->lineEdit->text();
             QString url = "ws://"+ip+":8888";
-            wsClient.open(url.toStdString().data());
+            //WsManager::Instance().startClient(url);
             clickedButton->setText("结束");
-            ScreenCaptureManager::Instance().startCapture();
+//            ScreenCaptureManager::Instance().startCapture();
             // 处理按钮1的逻辑
         }
         else if (clickedButton->text() == "结束")
         {
             qDebug()<<"stop server";
-            wsClient.close();
+            //WsManager::Instance().stopClient();
             clickedButton->setText("开始");
-            ScreenCaptureManager::Instance().stopCapture();
-            StorageVidoeManager::Instance().stopSaveVideo();
+//            ScreenCaptureManager::Instance().stopCapture();
+//            StorageVidoeManager::Instance().stopSaveVideo();
         }
     }
 }

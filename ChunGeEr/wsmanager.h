@@ -2,7 +2,8 @@
 #define WSMANAGER_H
 
 #include <QObject>
-
+#include "nlohmann/json.hpp"
+using json =  nlohmann::json;
 class WsManager : public QObject
 {
     Q_OBJECT
@@ -19,7 +20,7 @@ public:
     void startClient(const QString &url);
     void stopClient();
 signals:
-
+    void clientRecMeg(const std::string&msg);
 private:
 
 };

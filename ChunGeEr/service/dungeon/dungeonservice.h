@@ -19,4 +19,28 @@ signals:
 
 };
 
+
+class ClientDungeonService : public BaseService
+{
+    Q_OBJECT
+public:
+    explicit ClientDungeonService(QObject *parent = nullptr);
+
+    void run();
+
+    void startService();
+
+    void stopService();
+
+    void clientHandleRecMsg(const json &data);
+signals:
+
+};
+
+
+
+
+
+
+
 #endif // DUNGEONSERVICE_H

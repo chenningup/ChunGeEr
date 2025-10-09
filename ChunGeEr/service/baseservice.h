@@ -3,6 +3,7 @@
 
 #include <QThread>
 #include "screencapturemanager.h"
+#include "../wsmanager.h"
 class BaseService : public QThread
 {
     Q_OBJECT
@@ -11,10 +12,12 @@ public:
 
     virtual void run();
 
+    virtual void clientHandleRecMsg(const json &data);
 signals:
 
 public slots:
     void receiveCaptureScreen(ScreenCaptureManager::ScreenData data);
+    void clientRecMegSlot(const std::string&msg);
 public:
     std::shared_ptr<std::vector<uint8_t>> curPic;
 };

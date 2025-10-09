@@ -5,8 +5,7 @@
 #include <QDebug>
 #include "hv/WebSocketClient.h"
 #include "hv/WebSocketServer.h"
-#include "nlohmann/json.hpp"
-using json =  nlohmann::json;
+
 static WebSocketService ws;
 static websocket_server_t server;
 static hv::WebSocketClient wsClient;
@@ -64,8 +63,9 @@ void WsManager::init()
         {
             return;
         }
-        json data = json::parse(msg);
-        qDebug()<<QString::fromStdString(msg);
+        emit clientRecMeg(msg);
+        // json data = json::parse(msg);
+        // qDebug()<<QString::fromStdString(msg);
     };
 
     wsClient.onclose = [this]()

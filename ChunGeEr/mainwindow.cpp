@@ -63,7 +63,7 @@ void MainWindow::on_clickPushButton_clicked()
         else if (clickedButton->text() == "结束")
         {
             qDebug()<<"stop server";
-           // WsManager::Instance().stopServer();
+            WsManager::Instance().stopServer();
             clickedButton->setText("开始");
 //            ScreenCaptureManager::Instance().stopCapture();
 //            StorageVidoeManager::Instance().stopSaveVideo();

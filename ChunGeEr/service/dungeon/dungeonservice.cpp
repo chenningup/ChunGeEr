@@ -20,3 +20,13 @@ void ServerDungeonService::stopService()
 {
 
 }
+
+void ClientDungeonService::run()
+{
+
+}
+
+void ClientDungeonService::clientHandleRecMsg(const json &data)
+{
+
+}

@@ -15,6 +15,7 @@ public:
 
     void stopService();
 
+    virtual void handlePressEvent(int vkCode);
 signals:
 
 };
@@ -33,6 +34,7 @@ public:
     void stopService();
 
     void clientHandleRecMsg(const json &data);
+
 signals:
 
 };

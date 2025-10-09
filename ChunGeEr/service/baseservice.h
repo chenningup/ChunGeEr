@@ -13,11 +13,14 @@ public:
     virtual void run();
 
     virtual void clientHandleRecMsg(const json &data);
+
+    virtual void handlePressEvent(int vkCode);
 signals:
 
 public slots:
     void receiveCaptureScreen(ScreenCaptureManager::ScreenData data);
     void clientRecMegSlot(const std::string&msg);
+    void keyPressEventSlot(int vkCode);
 public:
     std::shared_ptr<std::vector<uint8_t>> curPic;
 };

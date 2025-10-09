@@ -5,6 +5,7 @@
 #include "mousekeyboardmanager.h"
 
 #include "wsmanager.h"
+#include "service/dungeon/dungeonservice.h"
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -12,7 +13,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     ui->lineEdit->setText("10.8.0.3");
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
-    StorageVidoeManager::Instance().init();
+    //StorageVidoeManager::Instance().init();
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
     WsManager::Instance().init();
@@ -26,12 +27,14 @@ MainWindow::~MainWindow()
 void MainWindow::on_clientRadioButton_clicked()
 {
     isMaster = false;
+    ui->clickPushButton->setText("连接");
 }
 
 
 void MainWindow::on_serverRadioButton_clicked()
 {
     isMaster = true;
+    ui->clickPushButton->setText("监听");
 }
 
 
@@ -50,45 +53,42 @@ void MainWindow::on_clickPushButton_clicked()
     }
     if(isMaster)
     {
-        if (clickedButton->text() == "开始")
+        if (clickedButton->text() == "监听")
         {
             qDebug()<<"run server";
-            WsManager::Instance().startServer();
             clickedButton->setText("结束");
-            //ScreenCaptureManager::Instance().startCapture();
-           // MouseKeyboardManager::Instance().clickButton("");
-           // Keyboardlistener::Instance().startListen();
-            // 处理按钮1的逻辑
+            WsManager::Instance().startServer();
         }
         else if (clickedButton->text() == "结束")
         {
             qDebug()<<"stop server";
             WsManager::Instance().stopServer();
-            clickedButton->setText("开始");
-//            ScreenCaptureManager::Instance().stopCapture();
-//            StorageVidoeManager::Instance().stopSaveVideo();
+            clickedButton->setText("监听");
         }
     }
     else
     {
-        if (clickedButton->text() == "开始")
+        if (clickedButton->text() == "连接")
         {
             qDebug()<<"run server";
             QString ip = ui->lineEdit->text();
             QString url = "ws://"+ip+":8888";
-            //WsManager::Instance().startClient(url);
+            WsManager::Instance().startClient(url);
             clickedButton->setText("结束");
-//            ScreenCaptureManager::Instance().startCapture();
-            // 处理按钮1的逻辑
         }
         else if (clickedButton->text() == "结束")
         {
             qDebug()<<"stop server";
-            //WsManager::Instance().stopClient();
-            clickedButton->setText("开始");
-//            ScreenCaptureManager::Instance().stopCapture();
-//            StorageVidoeManager::Instance().stopSaveVideo();
+            WsManager::Instance().stopClient();
+            clickedButton->setText("连接");
         }
     }
+}
+
+
+void MainWindow::on_testButton_clicked()
+{
+    ServerDungeonService *serivce = new ServerDungeonService();
+    serivce->startService();
 }
 

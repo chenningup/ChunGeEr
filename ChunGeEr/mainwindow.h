@@ -19,6 +19,8 @@ private slots:
     void on_serverRadioButton_clicked();
     void on_clickPushButton_clicked();
 
+    void on_testButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     bool isMaster;

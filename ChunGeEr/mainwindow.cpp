@@ -3,6 +3,7 @@
 #include "screencapturemanager.h"
 #include "StorageVidoeManager.h"
 #include "mousekeyboardmanager.h"
+#include "keyboardlistener.h"
 static WebSocketService ws;
 static websocket_server_t server;
 static hv::WebSocketClient wsClient;
@@ -113,10 +114,11 @@ void MainWindow::on_clickPushButton_clicked()
         if (clickedButton->text() == "开始")
         {
             qDebug()<<"run server";
-            websocket_server_run(&server, 0);
+            //websocket_server_run(&server, 0);
             clickedButton->setText("结束");
             //ScreenCaptureManager::Instance().startCapture();
-            MouseKeyboardManager::Instance().clickButton("");
+           // MouseKeyboardManager::Instance().clickButton("");
+            Keyboardlistener::Instance().startListen();
             // 处理按钮1的逻辑
         }
         else if (clickedButton->text() == "结束")

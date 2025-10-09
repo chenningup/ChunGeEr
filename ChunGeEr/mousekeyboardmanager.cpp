@@ -27,6 +27,7 @@ void MouseKeyboardManager::init()
     }
     qDebug() << "找到以下串口：";
     QSerialPortInfo choosePort;
+    bool isfound = false;
     for (const auto &port : ports)
     {
         if(port.description().contains("Leonardo"))
@@ -34,7 +35,10 @@ void MouseKeyboardManager::init()
             choosePort = port;
         }
     }
-
+    if(!isfound)
+    {
+        return;
+    }
     // 2. 使用第一个找到的串口（实际应用中应由用户选择或根据条件确定）
 
     serial.setPortName(choosePort.portName());
@@ -59,6 +63,10 @@ void MouseKeyboardManager::init()
 
 void MouseKeyboardManager::clickButton(const QString &button)
 {
+    if(!serial.isOpen())
+    {
+        return;
+    }
     QThread::sleep(10);
     QByteArray data;
     data.append(0x66);

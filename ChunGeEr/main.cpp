@@ -11,7 +11,7 @@ using namespace std;
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    QThread::sleep(10);
+    //QThread::sleep(10);
 
    //  Mat imageMat = imread("test.png"); // 请替换为你的图片路径
    //  cv::imshow("imageMat", imageMat);

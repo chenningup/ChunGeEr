@@ -9,3 +9,4 @@ build/
 .vs
 CMakeLists.txt.user*
 out
+CMakeLists.txt.user

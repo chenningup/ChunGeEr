@@ -11,6 +11,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    ui->lineEdit->setText("10.8.0.3");
     server.port = 8888;
     server.ws = &ws;
     ws.onopen = std::bind(&MainWindow::connectFromClient, this, std::placeholders::_1,std::placeholders::_2);
@@ -34,6 +35,11 @@ MainWindow::~MainWindow()
 
 void MainWindow::receiveFromClient(const WebSocketChannelPtr &channel, const std::string &msg)
 {
+    if(msg.empty())
+    {
+        return;
+    }
+    json data = json::parse(msg);
     qDebug()<<QString::fromStdString(msg);
 }
 
@@ -56,12 +62,17 @@ void MainWindow::closeFromClient(const WebSocketChannelPtr&channel)
 
 void MainWindow::receiveFromServer(const std::string &msg)
 {
-        qDebug()<<QString::fromStdString(msg);
+    if(msg.empty())
+    {
+        return;
+    }
+    json data = json::parse(msg);
+    qDebug()<<QString::fromStdString(msg);
 }
 
 void MainWindow::connectFromServer()
 {
-        //qDebug()<<QString::fromStdString(msg);
+    //qDebug()<<QString::fromStdString(msg);
 }
 
 void MainWindow::closeFromServer()
@@ -104,7 +115,8 @@ void MainWindow::on_clickPushButton_clicked()
             qDebug()<<"run server";
             websocket_server_run(&server, 0);
             clickedButton->setText("结束");
-            ScreenCaptureManager::Instance().startCapture();
+            //ScreenCaptureManager::Instance().startCapture();
+            MouseKeyboardManager::Instance().clickButton("");
             // 处理按钮1的逻辑
         }
         else if (clickedButton->text() == "结束")

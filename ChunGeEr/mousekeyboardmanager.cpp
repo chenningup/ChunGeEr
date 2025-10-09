@@ -2,9 +2,15 @@
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <QDebug>
+#include <QThread>
 MouseKeyboardManager::MouseKeyboardManager(QObject *parent)
     : QObject{parent}
 {}
+
+MouseKeyboardManager::~MouseKeyboardManager()
+{
+    serial.close();
+}
 
 MouseKeyboardManager &MouseKeyboardManager::Instance()
 {
@@ -14,19 +20,24 @@ MouseKeyboardManager &MouseKeyboardManager::Instance()
 
 void MouseKeyboardManager::init()
 {
-    auto ports = QSerialPortInfo::availablePorts();
+    QList<QSerialPortInfo> ports = QSerialPortInfo::availablePorts();
     if (ports.isEmpty()) {
         qDebug() << "未找到任何可用串口。";
         return;
     }
     qDebug() << "找到以下串口：";
-    for (const auto &port : ports) {
-        qDebug() << "  " << port.portName();
+    QSerialPortInfo choosePort;
+    for (const auto &port : ports)
+    {
+        if(port.description().contains("Leonardo"))
+        {
+            choosePort = port;
+        }
     }
 
     // 2. 使用第一个找到的串口（实际应用中应由用户选择或根据条件确定）
-    QSerialPort serial;
-    serial.setPortName(ports.first().portName());
+
+    serial.setPortName(choosePort.portName());
 
     // 3. 配置串口参数
     serial.setBaudRate(QSerialPort::Baud9600);
@@ -36,13 +47,27 @@ void MouseKeyboardManager::init()
     serial.setFlowControl(QSerialPort::NoFlowControl);
 
     // 4. 尝试打开串口
-    if (serial.open(QIODevice::ReadWrite)) {
+    if (serial.open(QIODevice::ReadWrite))
+    {
         qDebug() << "串口" << serial.portName() << "打开成功！";
-        // ... 此处可进行数据读写操作 ...
-        serial.write(QString("a").toLocal8Bit());
-        serial.close(); // 操作完成后关闭串口
-        qDebug() << "串口已关闭。";
-    } else {
+    }
+    else
+    {
         qDebug() << "打开串口失败：" << serial.errorString();
     }
+}
+
+void MouseKeyboardManager::clickButton(const QString &button)
+{
+    QThread::sleep(10);
+    QByteArray data;
+    data.append(0x66);
+    data.append(0x68);
+    data.append(0x01);
+    data.append(0x61);
+    data.append(0xC1);
+    data.append(0xC8);
+    data.append(0x5B);
+    data.append(0x81);
+    serial.write(data);
 }

@@ -7,6 +7,8 @@
 #include "hv/htime.h"
 #include "hv/hssl.h"
 #include "hv/WebSocketClient.h"
+#include "nlohmann/json.hpp"
+using json =  nlohmann::json;
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE

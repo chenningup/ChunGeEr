@@ -56,7 +56,7 @@ void MainWindow::closeFromClient(const WebSocketChannelPtr&channel)
 
 void MainWindow::receiveFromServer(const std::string &msg)
 {
-        qDebug()<<QString::fromStdString(msg);
+    qDebug()<<QString::fromStdString(msg);
 }
 
 void MainWindow::connectFromServer()

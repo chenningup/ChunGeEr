@@ -18,6 +18,12 @@ MainWindow::MainWindow(QWidget *parent)
     MouseKeyboardManager::Instance().init();
     WsManager::Instance().init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
+    //MouseKeyboardManager::Instance().clickButton("abcdef");
+    //MouseKeyboardManager::Instance().clickButton(" ");
+    //MouseKeyboardManager::Instance().mouseClick();
+    MouseKeyboardManager::Instance().moveMouse(10,10);
+   // MouseKeyboardManager::Instance().mouseDoubleClick();
+    //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
 }
 
 MainWindow::~MainWindow()

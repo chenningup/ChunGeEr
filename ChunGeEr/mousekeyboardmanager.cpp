@@ -3,6 +3,28 @@
 #include <QSerialPortInfo>
 #include <QDebug>
 #include <QThread>
+#include <QCursor>
+static uint16_t crc_16(uint8_t *data, uint16_t len)
+{
+    uint16_t crc_reg = 0xffff;
+    for (uint16_t i = 0; i < len; i++)
+    {
+        //infof(" crc_16{:x} i {}", data[i],i);
+        crc_reg ^= data[i];
+        for (uint16_t j = 0; j < 8; j++)
+        {
+            if (crc_reg & 0x01)
+            {
+                crc_reg = ((crc_reg >> 1) ^ 0xa001);
+            }
+            else
+            {
+                crc_reg = crc_reg >> 1;
+            }
+        }
+    }
+    return crc_reg;
+}
 MouseKeyboardManager::MouseKeyboardManager(QObject *parent)
     : QObject{parent}
 {}
@@ -32,6 +54,7 @@ void MouseKeyboardManager::init()
     {
         if(port.description().contains("Leonardo"))
         {
+            isfound = true;
             choosePort = port;
         }
     }
@@ -63,19 +86,111 @@ void MouseKeyboardManager::init()
 
 void MouseKeyboardManager::clickButton(const QString &button)
 {
-    if(!serial.isOpen())
+    if(!serial.isOpen() || button.isEmpty())
     {
         return;
     }
-    QThread::sleep(10);
-    QByteArray data;
-    data.append(0x66);
-    data.append(0x68);
-    data.append(0x01);
-    data.append(0x61);
-    data.append(0xC1);
-    data.append(0xC8);
-    data.append(0x5B);
-    data.append(0x81);
-    serial.write(data);
+
+    QByteArray ba = button.toLatin1();
+    QThread::sleep(5);
+    unsigned char key[100] = {0} ;
+    key[0] = 0x66;
+    key[1] = 0x68;
+    key[2] = 0x01;
+    key[3] = button.size();
+    for (int i = 0; i < ba.size(); ++i)
+    {
+        key[4+i] =( unsigned char)ba.at(i);
+    }
+    uint16_t crc= crc_16(&key[2],button.size() + 2);
+    memcpy(&key[4+button.size()],&crc,sizeof(uint16_t));
+    key[4+button.size() + 2] = 0x5B;
+    key[4+button.size() + 3] = 0x81;
+
+    // QByteArray data;
+    // data.append(0x66);
+    // data.append(0x68);
+    // data.append(0x01);
+    // data.append(0x61);
+    // data.append(0xC1);
+    // data.append(0xC8);
+    // data.append(0x5B);
+    // data.append(0x81);
+    qDebug()<<"write";
+    serial.write((const char *)key,4+button.size() + 4);
+}
+
+void MouseKeyboardManager::clickButton(int button)
+{
+    QThread::sleep(5);
+    unsigned char key[100] = {0} ;
+    key[0] = 0x66;
+    key[1] = 0x68;
+    key[2] = 0x01;
+    key[3] = 1;
+    key[4] = button;
+    uint16_t crc= crc_16(&key[2],3);
+    memcpy(&key[5],&crc,sizeof(uint16_t));
+    key[7] = 0x5B;
+    key[8] = 0x81;
+    qDebug()<<"write";
+    serial.write((const char *)key,4+1 + 4);
+}
+
+void MouseKeyboardManager::moveMouse(int x, int y)
+{
+    // 获取全局屏幕坐标
+    QPoint globalPos = QCursor::pos();
+    qDebug() << "Current Screen Position:" << globalPos;
+
+    // 转换为当前窗口坐标
+    //QPoint windowPos = this->mapFromGlobal(globalPos);
+    //qDebug() << "Current Window Position:" << windowPos;
+
+    QThread::sleep(5);
+    unsigned char key[100] = {0} ;
+    key[0] = 0x66;
+    key[1] = 0x68;
+    key[2] = 0x02;
+    key[3] = 1;
+    memcpy(&key[4],&x,sizeof(int));
+    memcpy(&key[8],&y,sizeof(int));
+    uint16_t crc= crc_16(&key[2],2+8);
+    memcpy(&key[12],&crc,sizeof(uint16_t));
+    key[14] = 0x5B;
+    key[15] = 0x81;
+    qDebug()<<"write";
+    serial.write((const char *)key,4+10 +4);
+}
+
+void MouseKeyboardManager::mouseClick()
+{
+    QThread::sleep(5);
+    unsigned char key[100] = {0} ;
+    key[0] = 0x66;
+    key[1] = 0x68;
+    key[2] = 0x02;
+    key[3] = 2;
+    uint16_t crc= crc_16(&key[2],2);
+    memcpy(&key[4],&crc,sizeof(uint16_t));
+    key[6] = 0x5B;
+    key[7] = 0x81;
+    qDebug()<<"write";
+    serial.write((const char *)key,4+ 4);
+}
+
+void MouseKeyboardManager::mouseDoubleClick()
+{
+    QThread::sleep(5);
+    unsigned char key[100] = {0} ;
+    key[0] = 0x66;
+    key[1] = 0x68;
+    key[2] = 0x02;
+    key[3] = 3;
+    uint16_t crc= crc_16(&key[2],2);
+    memcpy(&key[4],&crc,sizeof(uint16_t));
+    key[6] = 0x5B;
+    key[7] = 0x81;
+    qDebug()<<"write";
+    serial.write((const char *)key,4+ 4);
 }

@@ -65,18 +65,25 @@ struct HttpClientContext {
     HttpClientContext() {
         timerID = INVALID_TIMER_ID;
     }
+
     ~HttpClientContext() {
+        cancelTimer();
+    }
+
+    void cancelTimer() {
         if (timerID != INVALID_TIMER_ID) {
             killTimer(timerID);
             timerID = INVALID_TIMER_ID;
         }
     }
 
+    void cancelTask() {
+        cancelTimer();
+        task = NULL;
+    }
+
     void callback() {
-        if (timerID != INVALID_TIMER_ID) {
-            killTimer(timerID);
-            timerID = INVALID_TIMER_ID;
-        }
+        cancelTimer();
         if (task && task->cb) {
             task->cb(resp);
         }
@@ -107,17 +114,7 @@ public:
     }
 
     // thread-safe
-    int send(const HttpRequestPtr& req, HttpResponseCallback resp_cb) {
-        HttpClientTaskPtr task(new HttpClientTask);
-        task->req = req;
-        task->cb = std::move(resp_cb);
-        task->start_time = hloop_now_hrtime(EventLoopThread::hloop());
-        if (req->retry_count > 0 && req->retry_delay > 0) {
-            req->retry_count = MIN(req->retry_count, req->timeout * 1000 / req->retry_delay - 1);
-        }
-        return send(task);
-    }
-
+    int send(const HttpRequestPtr& req, HttpResponseCallback resp_cb);
     int send(const HttpClientTaskPtr& task) {
         EventLoopThread::loop()->queueInLoop(std::bind(&AsyncHttpClient::sendInLoop, this, task));
         return 0;
@@ -141,7 +138,7 @@ protected:
     }
 
     const SocketChannelPtr& addChannel(hio_t* io) {
-        SocketChannelPtr channel(new SocketChannel(io));
+        auto channel = std::make_shared<SocketChannel>(io);
         channel->newContext<HttpClientContext>();
         int fd = channel->fd();
         channels[fd] = channel;

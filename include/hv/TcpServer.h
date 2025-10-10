@@ -17,18 +17,26 @@ public:
 
     TcpServerEventLoopTmpl(EventLoopPtr loop = NULL) {
         acceptor_loop = loop ? loop : std::make_shared<EventLoop>();
+        port = 0;
         listenfd = -1;
         tls = false;
-        unpack_setting.mode = UNPACK_MODE_NONE;
+        tls_setting = NULL;
+        unpack_setting = NULL;
         max_connections = 0xFFFFFFFF;
         load_balance = LB_RoundRobin;
     }
 
     virtual ~TcpServerEventLoopTmpl() {
+        HV_FREE(tls_setting);
+        HV_FREE(unpack_setting);
     }
 
     EventLoopPtr loop(int idx = -1) {
-        return worker_threads.loop(idx);
+        EventLoopPtr worker_loop = worker_threads.loop(idx);
+        if (worker_loop == NULL) {
+            worker_loop = acceptor_loop;
+        }
+        return worker_loop;
     }
 
     //@retval >=0 listenfd, <0 error
@@ -80,6 +88,14 @@ public:
         hevent_set_userdata(listenio, this);
         if (tls) {
             hio_enable_ssl(listenio);
+            if (tls_setting) {
+                int ret = hio_new_ssl_ctx(listenio, tls_setting);
+                if (ret != 0) {
+                    hloge("new SSL_CTX failed: %d", ret);
+                    closesocket();
+                    return ret;
+                }
+            }
         }
         return 0;
     }
@@ -111,27 +127,30 @@ public:
     int withTLS(hssl_ctx_opt_t* opt = NULL) {
         tls = true;
         if (opt) {
-            opt->endpoint = HSSL_SERVER;
-            if (hssl_ctx_init(opt) == NULL) {
-                fprintf(stderr, "hssl_ctx_init failed!\n");
-                return -1;
+            if (tls_setting == NULL) {
+                HV_ALLOC_SIZEOF(tls_setting);
             }
+            opt->endpoint = HSSL_SERVER;
+            *tls_setting = *opt;
         }
         return 0;
     }
 
     void setUnpack(unpack_setting_t* setting) {
-        if (setting) {
-            unpack_setting = *setting;
-        } else {
-            unpack_setting.mode = UNPACK_MODE_NONE;
+        if (setting == NULL) {
+            HV_FREE(unpack_setting);
+            return;
         }
+        if (unpack_setting == NULL) {
+            HV_ALLOC_SIZEOF(unpack_setting);
+        }
+        *unpack_setting = *setting;
     }
 
     // channel
     const TSocketChannelPtr& addChannel(hio_t* io) {
         uint32_t id = hio_id(io);
-        auto channel = TSocketChannelPtr(new TSocketChannel(io));
+        auto channel = std::make_shared<TSocketChannel>(io);
         std::lock_guard<std::mutex> locker(mutex_);
         channels[id] = channel;
         return channels[id];
@@ -214,8 +233,8 @@ private:
             // so in this lambda function, no code should be added below.
         };
 
-        if (server->unpack_setting.mode != UNPACK_MODE_NONE) {
-            channel->setUnpack(&server->unpack_setting);
+        if (server->unpack_setting) {
+            channel->setUnpack(server->unpack_setting);
         }
         channel->startRead();
         if (server->onConnection) {
@@ -240,7 +259,8 @@ public:
     int                     port;
     int                     listenfd;
     bool                    tls;
-    unpack_setting_t        unpack_setting;
+    hssl_ctx_opt_t*         tls_setting;
+    unpack_setting_t*       unpack_setting;
     // Callback
     std::function<void(const TSocketChannelPtr&)>           onConnection;
     std::function<void(const TSocketChannelPtr&, Buffer*)>  onMessage;
@@ -265,26 +285,34 @@ public:
     TcpServerTmpl(EventLoopPtr loop = NULL)
         : EventLoopThread(loop)
         , TcpServerEventLoopTmpl<TSocketChannel>(EventLoopThread::loop())
+        , is_loop_owner(loop == NULL)
     {}
     virtual ~TcpServerTmpl() {
         stop(true);
     }
 
-    const EventLoopPtr& loop(int idx = -1) {
+    EventLoopPtr loop(int idx = -1) {
         return TcpServerEventLoopTmpl<TSocketChannel>::loop(idx);
     }
 
     // start thread-safe
     void start(bool wait_threads_started = true) {
         TcpServerEventLoopTmpl<TSocketChannel>::start(wait_threads_started);
-        EventLoopThread::start(wait_threads_started);
+        if (!isRunning()) {
+            EventLoopThread::start(wait_threads_started);
+        }
     }
 
     // stop thread-safe
     void stop(bool wait_threads_stopped = true) {
-        EventLoopThread::stop(wait_threads_stopped);
+        if (is_loop_owner) {
+            EventLoopThread::stop(wait_threads_stopped);
+        }
         TcpServerEventLoopTmpl<TSocketChannel>::stop(wait_threads_stopped);
     }
+
+private:
+    bool is_loop_owner;
 };
 
 typedef TcpServerTmpl<SocketChannel> TcpServer;

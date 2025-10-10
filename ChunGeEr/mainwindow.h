@@ -2,7 +2,8 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-
+#include "nlohmann/json.hpp"
+using json =  nlohmann::json;
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -20,7 +21,7 @@ private slots:
     void on_clickPushButton_clicked();
 
     void on_testButton_clicked();
-
+    void clientRecMegSlot(const json &msg);
 private:
     Ui::MainWindow *ui;
     bool isMaster;

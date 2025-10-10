@@ -15,12 +15,16 @@ public:
 
     UdpClientEventLoopTmpl(EventLoopPtr loop = NULL) {
         loop_ = loop ? loop : std::make_shared<EventLoop>();
+        remote_port = 0;
 #if WITH_KCP
-        enable_kcp = false;
+        kcp_setting = NULL;
 #endif
     }
 
     virtual ~UdpClientEventLoopTmpl() {
+#if WITH_KCP
+        HV_FREE(kcp_setting);
+#endif
     }
 
     const EventLoopPtr& loop() {
@@ -34,8 +38,12 @@ public:
         if (io == NULL) return -1;
         this->remote_host = remote_host;
         this->remote_port = remote_port;
-        channel.reset(new TSocketChannel(io));
-        return channel->fd();
+        channel = std::make_shared<TSocketChannel>(io);
+        int sockfd = channel->fd();
+        if (hv_strendswith(remote_host, ".255")) {
+            udp_broadcast(sockfd, 1);
+        }
+        return sockfd;
     }
 
     int bind(int local_port, const char* local_host = "0.0.0.0") {
@@ -52,6 +60,7 @@ public:
         if (ret != 0) {
             perror("bind");
         }
+        hio_set_localaddr(channel->io(), &local_addr.sa, SOCKADDR_LEN(&local_addr));
         return ret;
     }
 
@@ -84,8 +93,8 @@ public:
             }
         };
 #if WITH_KCP
-        if (enable_kcp) {
-            hio_set_kcp(channel->io(), &kcp_setting);
+        if (kcp_setting) {
+            hio_set_kcp(channel->io(), kcp_setting);
         }
 #endif
         return channel->startRead();
@@ -117,12 +126,14 @@ public:
 
 #if WITH_KCP
     void setKcp(kcp_setting_t* setting) {
-        if (setting) {
-            enable_kcp = true;
-            kcp_setting = *setting;
-        } else {
-            enable_kcp = false;
+        if (setting == NULL) {
+            HV_FREE(kcp_setting);
+            return;
         }
+        if (kcp_setting == NULL) {
+            HV_ALLOC_SIZEOF(kcp_setting);
+        }
+        *kcp_setting = *setting;
     }
 #endif
 
@@ -133,8 +144,7 @@ public:
     int                     remote_port;
 
 #if WITH_KCP
-    bool                    enable_kcp;
-    kcp_setting_t           kcp_setting;
+    kcp_setting_t*          kcp_setting;
 #endif
     // Callback
     std::function<void(const TSocketChannelPtr&, Buffer*)>  onMessage;
@@ -152,6 +162,7 @@ public:
     UdpClientTmpl(EventLoopPtr loop = NULL)
         : EventLoopThread(loop)
         , UdpClientEventLoopTmpl<TSocketChannel>(EventLoopThread::loop())
+        , is_loop_owner(loop == NULL)
     {}
     virtual ~UdpClientTmpl() {
         stop(true);
@@ -173,8 +184,13 @@ public:
     // stop thread-safe
     void stop(bool wait_threads_stopped = true) {
         UdpClientEventLoopTmpl<TSocketChannel>::closesocket();
-        EventLoopThread::stop(wait_threads_stopped);
+        if (is_loop_owner) {
+            EventLoopThread::stop(wait_threads_stopped);
+        }
     }
+
+private:
+    bool is_loop_owner;
 };
 
 typedef UdpClientTmpl<SocketChannel> UdpClient;

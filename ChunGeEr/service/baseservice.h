@@ -19,7 +19,7 @@ signals:
 
 public slots:
     void receiveCaptureScreen(ScreenCaptureManager::ScreenData data);
-    void clientRecMegSlot(const std::string&msg);
+    void clientRecMegSlot(const json &msg);
     void keyPressEventSlot(int vkCode);
 public:
     std::shared_ptr<std::vector<uint8_t>> curPic;

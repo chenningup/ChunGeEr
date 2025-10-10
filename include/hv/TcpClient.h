@@ -17,6 +17,7 @@ public:
 
     TcpClientEventLoopTmpl(EventLoopPtr loop = NULL) {
         loop_ = loop ? loop : std::make_shared<EventLoop>();
+        remote_port = 0;
         connect_timeout = HIO_DEFAULT_CONNECT_TIMEOUT;
         tls = false;
         tls_setting = NULL;
@@ -32,6 +33,13 @@ public:
 
     const EventLoopPtr& loop() {
         return loop_;
+    }
+
+    // delete thread-safe
+    void deleteInLoop() {
+        loop_->runInLoop([this](){
+            delete this;
+        });
     }
 
     // NOTE: By default, not bind local port. If necessary, you can call bind() after createsocket().
@@ -58,7 +66,7 @@ public:
         hio_t* io = hio_get(loop_->loop(), connfd);
         assert(io != NULL);
         hio_set_peeraddr(io, remote_addr, SOCKADDR_LEN(remote_addr));
-        channel.reset(new TSocketChannel(io));
+        channel = std::make_shared<TSocketChannel>(io);
         return connfd;
     }
 
@@ -85,7 +93,7 @@ public:
 
     // closesocket thread-safe
     void closesocket() {
-        if (channel) {
+        if (channel && channel->status != SocketChannel::CLOSED) {
             loop_->runInLoop([this](){
                 if (channel) {
                     setReconnect(NULL);
@@ -146,11 +154,11 @@ public:
             }
         };
         channel->onclose = [this]() {
+            bool reconnect = reconn_setting != NULL;
             if (onConnection) {
                 onConnection(channel);
             }
-            // reconnect
-            if (reconn_setting) {
+            if (reconnect) {
                 startReconnect();
             }
         };
@@ -259,6 +267,7 @@ public:
     TcpClientTmpl(EventLoopPtr loop = NULL)
         : EventLoopThread(loop)
         , TcpClientEventLoopTmpl<TSocketChannel>(EventLoopThread::loop())
+        , is_loop_owner(loop == NULL)
     {}
     virtual ~TcpClientTmpl() {
         stop(true);
@@ -273,15 +282,23 @@ public:
         if (isRunning()) {
             TcpClientEventLoopTmpl<TSocketChannel>::start();
         } else {
-            EventLoopThread::start(wait_threads_started, std::bind(&TcpClientTmpl::startConnect, this));
+            EventLoopThread::start(wait_threads_started, [this]() {
+                TcpClientTmpl::startConnect();
+                return 0;
+            });
         }
     }
 
     // stop thread-safe
     void stop(bool wait_threads_stopped = true) {
         TcpClientEventLoopTmpl<TSocketChannel>::closesocket();
-        EventLoopThread::stop(wait_threads_stopped);
+        if (is_loop_owner) {
+            EventLoopThread::stop(wait_threads_stopped);
+        }
     }
+
+private:
+    bool is_loop_owner;
 };
 
 typedef TcpClientTmpl<SocketChannel> TcpClient;

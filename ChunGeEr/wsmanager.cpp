@@ -24,10 +24,12 @@ WsManager &WsManager::Instance()
 
 void WsManager::init()
 {
-    server.port = 8888;
+    //memset(&server, 0, sizeof(server));
+    server.port = 7777;
     server.ws = &ws;
     ws.onopen = [this](const WebSocketChannelPtr &channel, const HttpRequestPtr &req) {
         // 转发到类成员
+        qDebug()<<"connect";
         clientList.push_back(channel);
     };
 
@@ -50,7 +52,6 @@ void WsManager::init()
             }
         }
     };
-
     // client 端的回调（通常 onopen/onmessage/onclose 的签名不同，按 hv 的定义写）
     wsClient.onopen = [this]()
     {
@@ -63,7 +64,8 @@ void WsManager::init()
         {
             return;
         }
-        emit clientRecMeg(msg);
+        json msgData= json::parse(msg);
+        emit clientRecMeg(msgData);
         // json data = json::parse(msg);
         // qDebug()<<QString::fromStdString(msg);
     };
@@ -93,4 +95,17 @@ void WsManager::startClient(const QString &url)
 void WsManager::stopClient()
 {
     wsClient.close();
+}
+
+void WsManager::sendMsgToClient(const std::string &msg)
+{
+    for (auto &client : clientList)
+    {
+        client->send(msg.c_str());
+    }
+}
+
+void WsManager::sendMsgToServer(const std::string &msg)
+{
+    wsClient.send(msg.c_str());
 }

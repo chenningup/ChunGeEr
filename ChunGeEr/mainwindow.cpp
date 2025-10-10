@@ -17,6 +17,7 @@ MainWindow::MainWindow(QWidget *parent)
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
     WsManager::Instance().init();
+    connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
 }
 
 MainWindow::~MainWindow()
@@ -72,7 +73,7 @@ void MainWindow::on_clickPushButton_clicked()
         {
             qDebug()<<"run server";
             QString ip = ui->lineEdit->text();
-            QString url = "ws://"+ip+":8888";
+            QString url = "ws://"+ip+":7777";
             WsManager::Instance().startClient(url);
             clickedButton->setText("结束");
         }
@@ -90,5 +91,20 @@ void MainWindow::on_testButton_clicked()
 {
     ServerDungeonService *serivce = new ServerDungeonService();
     serivce->startService();
+}
+
+void MainWindow::clientRecMegSlot(const json &msg)
+{
+    if(msg.contains("cmd"))
+    {
+        std::string cmd = msg["cmd"].get<std::string>();
+
+        if(cmd == "StartService")
+        {
+            ClientDungeonService *service = new ClientDungeonService();
+            service->startService();
+            //qDebug()<<"click key "<< key;
+        }
+    }
 }
 

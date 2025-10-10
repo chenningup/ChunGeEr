@@ -52,7 +52,7 @@ void ScreenCaptureManager::run()
 
     framePool.FrameArrived([&](auto const &sender, auto const &args) {
         QDateTime time = QDateTime::currentDateTime();
-        qDebug() << "5" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")<<num;
+        //qDebug() << "5" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")<<num;
         num++;
         auto frame = sender.TryGetNextFrame();
         if (frame) {

@@ -28,10 +28,9 @@ void BaseService::receiveCaptureScreen(ScreenCaptureManager::ScreenData data)
     curPic = data.data;
 }
 
-void BaseService::clientRecMegSlot(const std::string &msg)
+void BaseService::clientRecMegSlot(const json &msg)
 {
-    json  data = json::parse(msg);
-    clientHandleRecMsg(data);
+    clientHandleRecMsg(msg);
 }
 
 void BaseService::keyPressEventSlot(int vkCode)

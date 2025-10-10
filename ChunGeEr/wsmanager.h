@@ -4,6 +4,12 @@
 #include <QObject>
 #include "nlohmann/json.hpp"
 using json =  nlohmann::json;
+//{
+//    "cmd": "KeyboardSync",
+//    "data": {
+//        "key": 80
+//    }
+//}
 class WsManager : public QObject
 {
     Q_OBJECT
@@ -19,8 +25,12 @@ public:
 
     void startClient(const QString &url);
     void stopClient();
+
+    void sendMsgToClient(const std::string &msg);
+
+    void sendMsgToServer(const std::string &msg);
 signals:
-    void clientRecMeg(const std::string&msg);
+    void clientRecMeg(const json &msg);
 private:
 
 };

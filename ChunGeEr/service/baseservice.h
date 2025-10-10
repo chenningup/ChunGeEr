@@ -15,6 +15,10 @@ public:
     virtual void clientHandleRecMsg(const json &data);
 
     virtual void handlePressEvent(int vkCode);
+
+    virtual void startService()=0;
+
+    virtual void stopService()=0;
 signals:
 
 public slots:

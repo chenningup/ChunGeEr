@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "nlohmann/json.hpp"
+#include "service/baseservice.h"
 using json =  nlohmann::json;
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -25,5 +26,6 @@ private slots:
 private:
     Ui::MainWindow *ui;
     bool isMaster;
+    std::shared_ptr<BaseService>mService;
 };
 #endif // MAINWINDOW_H

@@ -105,7 +105,7 @@ void MainWindow::clientRecMegSlot(const json &msg)
             {
                 mService->stopService();
             }
-            std::string serviceName = msg["data"]["DungeonService"].get<std::string>();
+            std::string serviceName = msg["data"]["ServiceName"].get<std::string>();
             if(serviceName == "DungeonService")
             {
                 std::shared_ptr<ClientDungeonService>service = std::make_shared<ClientDungeonService>();

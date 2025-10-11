@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <QSerialPort>
+#include <random>
+#include <cmath>
 #define KEY_LEFT_CTRL     0x80
 #define KEY_LEFT_SHIFT    0x81
 #define KEY_LEFT_ALT      0x82
@@ -91,7 +93,7 @@ public:
 
     void clickButton(int button);
 
-    void moveMouse(int x, int y);
+    void humanMouseMove(int endX, int endY);
 
     void mouseClick();
 
@@ -99,7 +101,12 @@ public:
 signals:
 
 private:
+    void moveMouse(int x, int y);
+private:
     QSerialPort serial;
+
+    std::mt19937 rng;
+    std::uniform_real_distribution<double> dist;
 };
 
 #endif // MOUSEKEYBOARDMANAGER_H

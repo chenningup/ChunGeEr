@@ -6,6 +6,8 @@
 
 #include "wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
+
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -21,8 +23,8 @@ MainWindow::MainWindow(QWidget *parent)
     //MouseKeyboardManager::Instance().clickButton("abcdef");
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
-    MouseKeyboardManager::Instance().moveMouse(10,10);
-   // MouseKeyboardManager::Instance().mouseDoubleClick();
+    //MouseKeyboardManager::Instance().humanMouseMove(10,10);
+    //MouseKeyboardManager::Instance().mouseDoubleClick();
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
 }
 

@@ -8,7 +8,7 @@ class BaseService : public QThread
 {
     Q_OBJECT
 public:
-    explicit BaseService(QObject *parent = nullptr);
+    explicit BaseService(QObject *parent = nullptr,bool NeedCputure = true);
 
     virtual void run();
 
@@ -27,6 +27,9 @@ public slots:
     void keyPressEventSlot(int vkCode);
 public:
     std::shared_ptr<std::vector<uint8_t>> curPic;
+    bool toRun;
+    QStringList tasks;
+    bool needCputure;
 };
 
 #endif // BASESERVICE_H

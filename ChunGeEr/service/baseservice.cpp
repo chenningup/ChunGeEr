@@ -1,9 +1,12 @@
 #include "baseservice.h"
 #include "../keyboardlistener.h"
-BaseService::BaseService(QObject *parent)
-    : QThread{parent}
+BaseService::BaseService(QObject *parent,bool  NeedCputure)
+    : QThread{parent},toRun(false),needCputure(NeedCputure)
 {
-    connect(&ScreenCaptureManager::Instance(),&ScreenCaptureManager::capturedScreen,this,&BaseService::receiveCaptureScreen,Qt::QueuedConnection);
+    if(needCputure)
+    {
+        connect(&ScreenCaptureManager::Instance(),&ScreenCaptureManager::capturedScreen,this,&BaseService::receiveCaptureScreen,Qt::QueuedConnection);
+    }
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&BaseService::clientRecMegSlot,Qt::QueuedConnection);
     connect(&Keyboardlistener::Instance(),&Keyboardlistener::keyPressEvent,this,&BaseService::keyPressEventSlot,Qt::QueuedConnection);
 }

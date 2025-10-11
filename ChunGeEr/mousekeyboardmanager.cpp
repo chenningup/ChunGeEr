@@ -4,6 +4,10 @@
 #include <QDebug>
 #include <QThread>
 #include <QCursor>
+#include <random>
+#include <windows.h>
+#pragma comment(lib, "User32.lib")
+#pragma comment(lib, "imm32.lib")
 static uint16_t crc_16(uint8_t *data, uint16_t len)
 {
     uint16_t crc_reg = 0xffff;
@@ -25,6 +29,12 @@ static uint16_t crc_16(uint8_t *data, uint16_t len)
     }
     return crc_reg;
 }
+int getRandomInRange(int min, int max) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(min, max);
+    return distrib(gen);
+}
 MouseKeyboardManager::MouseKeyboardManager(QObject *parent)
     : QObject{parent}
 {}
@@ -39,7 +49,7 @@ MouseKeyboardManager &MouseKeyboardManager::Instance()
     static MouseKeyboardManager mMouseKeyboardManager;
     return mMouseKeyboardManager;
 }
-
+static HKL s_previousLayout;
 void MouseKeyboardManager::init()
 {
     QList<QSerialPortInfo> ports = QSerialPortInfo::availablePorts();
@@ -137,17 +147,45 @@ void MouseKeyboardManager::clickButton(int button)
     serial.write((const char *)key,4+1 + 4);
 }
 
+void MouseKeyboardManager::humanMouseMove(int endX, int endY)
+{
+    QThread::sleep(5);
+    QPoint current = QCursor::pos();
+    double distance = sqrt(pow(endX - current.x(), 2) + pow(endY - current.y(), 2));
+    int steps = static_cast<int>(distance * 0.15); // 减少步数比例提高速度
+    steps = (std::max)(5, (std::min)(steps, 50));  // 限制在5-50步之间
+
+    // 生成轻微曲线控制点
+    int controlX = (current.x() + endX) / 2 + getRandomInRange(-20, 20);
+    int controlY = (current.y() + endY) / 2 + getRandomInRange(-20, 20);
+    int preX = current.x();
+    int preY = current.y();
+    for (int i = 0; i <= steps; i++) {
+        double t = (double)i / steps;
+        // 二次贝塞尔曲线
+        int x = (int)(pow(1-t,2)*current.x() + 2*(1-t)*t*controlX + pow(t,2)*endX);
+        int y = (int)(pow(1-t,2)*current.y() + 2*(1-t)*t*controlY + pow(t,2)*endY);
+
+        moveMouse(x - preX , y - preY);
+        preX = x;
+        preY = y;
+        // 动态延迟：非线性变化，但总体更快
+        int delay =  (int)(2* fabs(sin(t * 3.14159))); // 减少基础延迟
+        if (i < steps)
+        {
+            QThread::msleep(delay);
+        }
+    }
+}
+
 void MouseKeyboardManager::moveMouse(int x, int y)
 {
-    // 获取全局屏幕坐标
-    QPoint globalPos = QCursor::pos();
-    qDebug() << "Current Screen Position:" << globalPos;
 
     // 转换为当前窗口坐标
     //QPoint windowPos = this->mapFromGlobal(globalPos);
     //qDebug() << "Current Window Position:" << windowPos;
 
-    QThread::sleep(5);
+
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
@@ -162,6 +200,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     qDebug()<<"write";
     serial.write((const char *)key,4+10 +4);
 }
+
 
 void MouseKeyboardManager::mouseClick()
 {

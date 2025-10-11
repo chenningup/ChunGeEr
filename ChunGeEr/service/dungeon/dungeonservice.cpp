@@ -19,7 +19,7 @@
 
 
 ServerDungeonService::ServerDungeonService(QObject *parent)
-    : BaseService{parent}
+    : BaseService{parent,false}
 {
 
 }
@@ -51,7 +51,9 @@ void ServerDungeonService::stopService()
 void ServerDungeonService::handlePressEvent(int vkCode)
 {
     qDebug()<<"handlePressEvent"<<vkCode;
-    if(vkCode == 192)
+    switch(vkCode)
+    {
+    case 192:
     {
         json cmd ;
         cmd["cmd"] = "KeyboardSync";
@@ -60,27 +62,72 @@ void ServerDungeonService::handlePressEvent(int vkCode)
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
+    break;
+    case 70:
+    {
+        json cmd ;
+        cmd["cmd"] = "FollowLeader";
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+    break;
+    case 71:
+    {
+        json cmd ;
+        cmd["cmd"] = "UseSkill";
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+    break;
+    case 72:
+    {
+        json cmd ;
+        cmd["cmd"] = "FollowSup";
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+    break;
+
+
+    }
+
 }
 
 
-ClientDungeonService::ClientDungeonService(QObject *parent) : BaseService{parent}
+ClientDungeonService::ClientDungeonService(QObject *parent) : BaseService{parent,true}
 {
 
 }
 
 void ClientDungeonService::run()
 {
-
+    while(toRun)
+    {
+        for (int i = 0; i < tasks.size(); ++i)
+        {
+            QString task = tasks[i];
+            if(task == "FollowLeader")
+            {
+                qDebug()<<"FollowLeader";
+            }
+            if(task == "UseSkill")
+            {
+                qDebug()<<"UseSkill";
+            }
+            if(task == "FollowSup")
+            {
+                qDebug()<<"FollowSup";
+            }
+        }
+    }
 }
 
 void ClientDungeonService::startService()
 {
-
+    toRun = true;
+    start();
 }
 
 void ClientDungeonService::stopService()
 {
-
+    toRun = false;
 }
 
 void ClientDungeonService::clientHandleRecMsg(const json &data)
@@ -88,11 +135,26 @@ void ClientDungeonService::clientHandleRecMsg(const json &data)
     if(data.contains("cmd"))
     {
         std::string cmd = data["cmd"].get<std::string>();
-
         if(cmd == "KeyboardSync")
         {
             int key = data["data"]["key"].get<int>();
             qDebug()<<"click key "<< key;
+            return;
+        }
+        if(cmd == "FollowLeader")
+        {
+            tasks.push_back("FollowLeader");
+            return;
+        }
+        if(cmd == "UseSkill")
+        {
+            tasks.push_back("UseSkill");
+            return;
+        }
+        if(cmd == "FollowSup")
+        {
+            tasks.push_back("FollowSup");
+            return;
         }
     }
 }

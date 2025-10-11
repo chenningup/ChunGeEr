@@ -19,7 +19,7 @@
 
 
 ServerDungeonService::ServerDungeonService(QObject *parent)
-    : BaseService{parent,false}
+    : BaseService{parent}
 {
 
 }
@@ -32,7 +32,6 @@ void ServerDungeonService::run()
 void ServerDungeonService::startService()
 {
     Keyboardlistener::Instance().startListen();
-    ScreenCaptureManager::Instance().startCapture();
     json cmd ;
     cmd["cmd"] = "StartService";
     json data;
@@ -91,7 +90,7 @@ void ServerDungeonService::handlePressEvent(int vkCode)
 }
 
 
-ClientDungeonService::ClientDungeonService(QObject *parent) : BaseService{parent,true}
+ClientDungeonService::ClientDungeonService(QObject *parent) : BaseService{parent}
 {
 
 }
@@ -100,9 +99,9 @@ void ClientDungeonService::run()
 {
     while(toRun)
     {
-        for (int i = 0; i < tasks.size(); ++i)
+        if(!tasks.isEmpty())
         {
-            QString task = tasks[i];
+            QString task = tasks[0];
             if(task == "FollowLeader")
             {
                 qDebug()<<"FollowLeader";
@@ -115,7 +114,9 @@ void ClientDungeonService::run()
             {
                 qDebug()<<"FollowSup";
             }
+            tasks.pop_front();
         }
+        QThread::sleep(1);
     }
 }
 

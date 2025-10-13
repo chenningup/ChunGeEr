@@ -92,6 +92,10 @@ void MouseKeyboardManager::init()
     {
         qDebug() << "打开串口失败：" << serial.errorString();
     }
+    connect(&serial,&QSerialPort::readyRead,[=](){
+        QByteArray Read_Buf=serial.readAll();
+        qDebug()<<Read_Buf;
+    });
 }
 
 void MouseKeyboardManager::clickButton(const QString &button)
@@ -149,11 +153,11 @@ void MouseKeyboardManager::clickButton(int button)
 
 void MouseKeyboardManager::humanMouseMove(int endX, int endY)
 {
-    QThread::sleep(5);
+    QThread::sleep(2);
     QPoint current = QCursor::pos();
     double distance = sqrt(pow(endX - current.x(), 2) + pow(endY - current.y(), 2));
-    int steps = static_cast<int>(distance * 0.15); // 减少步数比例提高速度
-    steps = (std::max)(5, (std::min)(steps, 50));  // 限制在5-50步之间
+    int steps = static_cast<int>(distance * 0.30); // 减少步数比例提高速度
+    steps = (std::max)(5, (std::min)(steps, 300));  // 限制在5-50步之间
 
     // 生成轻微曲线控制点
     int controlX = (current.x() + endX) / 2 + getRandomInRange(-20, 20);
@@ -170,22 +174,25 @@ void MouseKeyboardManager::humanMouseMove(int endX, int endY)
         preX = x;
         preY = y;
         // 动态延迟：非线性变化，但总体更快
-        int delay =  (int)(2* fabs(sin(t * 3.14159))); // 减少基础延迟
+        int delay = 3 + (int)(2* fabs(sin(t * 3.14159))); // 减少基础延迟
         if (i < steps)
         {
             QThread::msleep(delay);
         }
     }
+    qDebug()<<"steps"<<steps;
 }
 
 void MouseKeyboardManager::moveMouse(int x, int y)
 {
-
+    if(x == 0 && y ==0)
+    {
+        return ;
+    }
     // 转换为当前窗口坐标
     //QPoint windowPos = this->mapFromGlobal(globalPos);
     //qDebug() << "Current Window Position:" << windowPos;
-
-
+    qDebug() <<"move x:"<<x<<",move y:"<<y;
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
@@ -199,6 +206,8 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     key[15] = 0x81;
     qDebug()<<"write";
     serial.write((const char *)key,4+10 +4);
+    serial.flush();
+    serial.waitForBytesWritten();
 }
 
 
@@ -226,6 +235,22 @@ void MouseKeyboardManager::mouseDoubleClick()
     key[1] = 0x68;
     key[2] = 0x02;
     key[3] = 3;
+    uint16_t crc= crc_16(&key[2],2);
+    memcpy(&key[4],&crc,sizeof(uint16_t));
+    key[6] = 0x5B;
+    key[7] = 0x81;
+    qDebug()<<"write";
+    serial.write((const char *)key,4+ 4);
+}
+
+void MouseKeyboardManager::mouseRightClick()
+{
+    QThread::sleep(5);
+    unsigned char key[100] = {0} ;
+    key[0] = 0x66;
+    key[1] = 0x68;
+    key[2] = 0x02;
+    key[3] = 4;
     uint16_t crc= crc_16(&key[2],2);
     memcpy(&key[4],&crc,sizeof(uint16_t));
     key[6] = 0x5B;

@@ -23,8 +23,12 @@ MainWindow::MainWindow(QWidget *parent)
     //MouseKeyboardManager::Instance().clickButton("abcdef");
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
-    //MouseKeyboardManager::Instance().humanMouseMove(10,10);
+    MouseKeyboardManager::Instance().humanMouseMove(10,10);
+   // QThread::sleep(5);
+    //MouseKeyboardManager::Instance().moveMouse(-25,-25);
     //MouseKeyboardManager::Instance().mouseDoubleClick();
+    //MouseKeyboardManager::Instance().mouseRightClick();
+
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
 }
 

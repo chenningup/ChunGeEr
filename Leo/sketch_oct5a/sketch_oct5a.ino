@@ -129,21 +129,27 @@ void loop() {
                         int type  = buffer[3];
                         if(type == 1)
                         {
-                            int x;
+                            int32_t  x = 0;
                             memcpy(&x, &buffer[4], 4);
-                            int y;
+                            int32_t  y = 0;
                             memcpy(&y, &buffer[8], 4);
+                            //Mouse.move(x, y, 0);
                             Mouse.move(x, y, 0);
                         }
                         else if(type == 2)
                         {
                             Mouse.click(MOUSE_LEFT);
                         }
+
                         else if(type == 3)
                         {
                             Mouse.click(MOUSE_LEFT);
                             delay(150);
                             Mouse.click(MOUSE_LEFT);
+                        }
+                        else if(type == 4)
+                        {
+                            Mouse.click(MOUSE_RIGHT);
                         }
                     }
                     pr=0;

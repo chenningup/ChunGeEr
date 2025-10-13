@@ -98,10 +98,14 @@ public:
     void mouseClick();
 
     void mouseDoubleClick();
+
+    void mouseRightClick();
+
+    void moveMouse(int x, int y);
 signals:
 
 private:
-    void moveMouse(int x, int y);
+
 private:
     QSerialPort serial;
 

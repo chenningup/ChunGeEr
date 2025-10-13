@@ -46,10 +46,18 @@ void loop() {
     QByteArray data;
     data.append(0x66);
     data.append(0x68);
+    data.append(0x02);
     data.append(0x01);
-    data.append(0x61);
-    data.append(0xC1);
-    data.append(0xC8);
+    data.append(0x9c);
+    data.append(0xff);
+    data.append(0xff);
+    data.append(0xff);
+    data.append(0x9c);
+    data.append(0xff);
+    data.append(0xff);
+    data.append(0xff);
+    data.append(0xC5);
+    data.append(0xA0);
     data.append(0x5B);
     data.append(0x81);
     for (int var = 0; var < data.size(); ++var)
@@ -109,10 +117,15 @@ void loop() {
                 }
                 else
                 {
-                    int cmd =  buffer[2];
+                    int cmd =  buffer[3];
                     if(cmd == 1)//键盘
                     {
-
+                        int x;
+                        memcpy(&x, &buffer[4], 4);
+                        int y;
+                        memcpy(&y, &buffer[8], 4);
+                        //Mouse.move(x, y, 0);
+                        //Mouse.move(y, y, 0);
                         //Keyboard.write(buffer[4]);
                     }
                     if(cmd == 2)

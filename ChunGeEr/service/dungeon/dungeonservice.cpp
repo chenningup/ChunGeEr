@@ -95,6 +95,11 @@ ClientDungeonService::ClientDungeonService(QObject *parent) : BaseService{parent
 
 }
 
+ClientDungeonService::~ClientDungeonService()
+{
+    toRun = false;
+}
+
 void ClientDungeonService::run()
 {
     while(toRun)
@@ -116,7 +121,7 @@ void ClientDungeonService::run()
             }
             tasks.pop_front();
         }
-        QThread::sleep(1);
+        QThread::msleep(300);
     }
 }
 

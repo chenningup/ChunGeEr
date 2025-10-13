@@ -38,11 +38,22 @@ target_link_libraries(ScreenCapture PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_V
 
 
 
+add_library(YoloOnnx STATIC
+    ${CMAKE_SOURCE_DIR}/../YoloOnnx/inference.cpp
+    ${CMAKE_SOURCE_DIR}/../YoloOnnx/inference.h
+)
+
+include_directories(YoloOnnx ${CMAKE_SOURCE_DIR}/../include/onnx)
+target_link_libraries(YoloOnnx ${CMAKE_SOURCE_DIR}/../Libs/onnxruntime.lib)
+
+
+
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets SerialPort)
 
 include_directories(${CMAKE_SOURCE_DIR}/../include)
 include_directories(${CMAKE_SOURCE_DIR}/../ScreenCapture/)
+include_directories(${CMAKE_SOURCE_DIR}/../YoloOnnx/)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Debug)
@@ -51,6 +62,11 @@ else()
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)
 endif()
 link_directories(${CMAKE_SOURCE_DIR}/../Libs/)
+
+
+
+
+
 set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
@@ -110,7 +126,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         avutil
         swresample
         swscale
-        avformat)
+        avformat
+        onnxruntime
+        YoloOnnx
+        opencv_dnn490d)
 else()
     # Release 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)

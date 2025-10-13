@@ -27,6 +27,8 @@ class ClientDungeonService : public BaseService
 public:
     explicit ClientDungeonService(QObject *parent = nullptr);
 
+    ~ClientDungeonService();
+
     void run();
 
     void startService();

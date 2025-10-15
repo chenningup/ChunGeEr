@@ -25,7 +25,7 @@ private slots:
     void clientRecMegSlot(const json &msg);
 private:
     Ui::MainWindow *ui;
-    bool isMaster;
+
     std::shared_ptr<BaseService>mService;
 };
 #endif // MAINWINDOW_H

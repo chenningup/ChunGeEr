@@ -86,6 +86,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         service/baseservice.h service/baseservice.cpp
         service/dungeon/dungeonservice.h service/dungeon/dungeonservice.cpp
         wsmanager.h wsmanager.cpp
+        encodingmanager.h encodingmanager.cpp
+        safepacket.h safepacket.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET ChunGeEr APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

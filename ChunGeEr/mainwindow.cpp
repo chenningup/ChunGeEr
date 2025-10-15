@@ -6,8 +6,9 @@
 
 #include "wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
-
-
+#include "encodingmanager.h"
+#include "StorageVidoeManager.h"
+bool isMaster;
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -18,18 +19,24 @@ MainWindow::MainWindow(QWidget *parent)
     //StorageVidoeManager::Instance().init();
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
+    EncodingManager::Instance().init();
+    StorageVidoeManager::Instance().init();
     WsManager::Instance().init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
     //MouseKeyboardManager::Instance().clickButton("abcdef");
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
-    MouseKeyboardManager::Instance().humanMouseMove(10,10);
+    //MouseKeyboardManager::Instance().humanMouseMove(10,10);
    // QThread::sleep(5);
     //MouseKeyboardManager::Instance().moveMouse(-25,-25);
     //MouseKeyboardManager::Instance().mouseDoubleClick();
     //MouseKeyboardManager::Instance().mouseRightClick();
 
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
+
+    EncodingManager::Instance().startEncodeing();
+    ScreenCaptureManager::Instance().startCapture();
+    StorageVidoeManager::Instance().startSaveVideo("D:\\asdfasdf.mp4");
 }
 
 MainWindow::~MainWindow()
@@ -101,8 +108,10 @@ void MainWindow::on_clickPushButton_clicked()
 
 void MainWindow::on_testButton_clicked()
 {
-    ServerDungeonService *serivce = new ServerDungeonService();
-    serivce->startService();
+//    ServerDungeonService *serivce = new ServerDungeonService();
+//    serivce->startService();
+    StorageVidoeManager::Instance().stopSaveVideo();
+    EncodingManager::Instance().stopEncodeing();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)

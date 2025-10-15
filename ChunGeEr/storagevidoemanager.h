@@ -14,6 +14,8 @@ extern "C" {
 #include <libavutil/hwcontext.h>
 }
 #include "screencapturemanager.h"
+#include "safepacket.h"
+#include <QFile>
 class StorageVidoeManager : public QThread
 {
     Q_OBJECT
@@ -26,22 +28,25 @@ public:
 
     void run();
 
+    void startSaveVideo(const QString &filePath);
+
     void stopSaveVideo();
 signals:
 
 public slots:
-    void receiveCaptureScreen(ScreenCaptureManager::ScreenData data);
+    void receiveCaptureScreen(std::shared_ptr<SafePacket> data);
 private:
     QSemaphore mScreenSem;
     QMutex mScreenMutex;
-    QList<ScreenCaptureManager::ScreenData>mScreenList;
+    QList<std::shared_ptr<SafePacket>>mScreenList;
     bool isSaving;
 
-    AVFormatContext* m_formatContext = nullptr;
     AVCodecContext* m_codecContext = nullptr;
+    AVFormatContext* m_formatContext = nullptr;
+//    AVCodecContext* m_codecContext = nullptr;
     AVStream* m_stream = nullptr;
-    SwsContext* m_swsContext = nullptr;
-    AVBufferRef* hw_device_ctx = nullptr;
+//    SwsContext* m_swsContext = nullptr;
+//    AVBufferRef* hw_device_ctx = nullptr;
 };
 
 

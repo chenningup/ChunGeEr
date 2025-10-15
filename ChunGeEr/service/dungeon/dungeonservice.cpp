@@ -44,7 +44,6 @@ void ServerDungeonService::startService()
 void ServerDungeonService::stopService()
 {
     Keyboardlistener::Instance().stopListen();
-    ScreenCaptureManager::Instance().stopCapture();
 }
 
 void ServerDungeonService::handlePressEvent(int vkCode)

@@ -6,8 +6,10 @@
 
 #include "wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
-
-
+#include "encodingmanager.h"
+#include "StorageVidoeManager.h"
+#include "screenshare.h"
+bool isMaster;
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -18,18 +20,28 @@ MainWindow::MainWindow(QWidget *parent)
     //StorageVidoeManager::Instance().init();
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
+    EncodingManager::Instance().init();
+    StorageVidoeManager::Instance().init();
     WsManager::Instance().init();
+    ScreenShare::Instance().init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
+    connect(&ScreenShare::Instance(),&ScreenShare::showScreen,this,&MainWindow::screenShowSlot,Qt::QueuedConnection);
     //MouseKeyboardManager::Instance().clickButton("abcdef");
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
-    MouseKeyboardManager::Instance().humanMouseMove(10,10);
+    //MouseKeyboardManager::Instance().humanMouseMove(10,10);
    // QThread::sleep(5);
     //MouseKeyboardManager::Instance().moveMouse(-25,-25);
     //MouseKeyboardManager::Instance().mouseDoubleClick();
     //MouseKeyboardManager::Instance().mouseRightClick();
 
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
+
+    //EncodingManager::Instance().startEncodeing();
+    //ScreenCaptureManager::Instance().startCapture();
+    //StorageVidoeManager::Instance().startSaveVideo("D:\\asdfasdf.mp4");
+
+
 }
 
 MainWindow::~MainWindow()
@@ -87,12 +99,14 @@ void MainWindow::on_clickPushButton_clicked()
             QString ip = ui->lineEdit->text();
             QString url = "ws://"+ip+":7777";
             WsManager::Instance().startClient(url);
+            ScreenCaptureManager::Instance().startCapture();
             clickedButton->setText("结束");
         }
         else if (clickedButton->text() == "结束")
         {
             qDebug()<<"stop server";
             WsManager::Instance().stopClient();
+            ScreenCaptureManager::Instance().stopCapture();
             clickedButton->setText("连接");
         }
     }
@@ -101,8 +115,10 @@ void MainWindow::on_clickPushButton_clicked()
 
 void MainWindow::on_testButton_clicked()
 {
-    ServerDungeonService *serivce = new ServerDungeonService();
-    serivce->startService();
+//    ServerDungeonService *serivce = new ServerDungeonService();
+//    serivce->startService();
+    StorageVidoeManager::Instance().stopSaveVideo();
+    EncodingManager::Instance().stopEncodeing();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)
@@ -127,5 +143,30 @@ void MainWindow::clientRecMegSlot(const json &msg)
             //qDebug()<<"click key "<< key;
         }
     }
+}
+
+
+void MainWindow::on_screenShareButton_clicked()
+{
+    QObject *senderObj = sender();
+    // 2. 安全地转换为具体的按钮类型
+    QPushButton *clickedButton = qobject_cast<QPushButton*>(senderObj);
+    if (clickedButton->text() == "画面共享")
+    {
+        clickedButton->setText("结束");
+        EncodingManager::Instance().startEncodeing();
+        ScreenShare::Instance().startShare(ui->lineEdit->text());
+    }
+    else if (clickedButton->text() == "结束")
+    {
+        clickedButton->setText("画面共享");
+        EncodingManager::Instance().stopEncodeing();
+        ScreenShare::Instance().stopShare();
+    }
+}
+
+void MainWindow::screenShowSlot(QImage pic)
+{
+    ui->label->setPixmap(QPixmap::fromImage(pic));
 }
 

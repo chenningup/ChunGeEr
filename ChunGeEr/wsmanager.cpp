@@ -5,6 +5,7 @@
 #include <QDebug>
 #include "hv/WebSocketClient.h"
 #include "hv/WebSocketServer.h"
+
 static WebSocketService ws;
 static websocket_server_t server;
 static hv::WebSocketClient wsClient;
@@ -72,6 +73,7 @@ void WsManager::init()
     wsClient.onclose = [this]()
     {
     };
+
 }
 
 

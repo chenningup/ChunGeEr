@@ -23,6 +23,10 @@ private slots:
 
     void on_testButton_clicked();
     void clientRecMegSlot(const json &msg);
+    void on_screenShareButton_clicked();
+
+
+    void screenShowSlot(QImage pic);
 private:
     Ui::MainWindow *ui;
 

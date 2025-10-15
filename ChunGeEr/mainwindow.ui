@@ -48,6 +48,13 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="screenShareButton">
+        <property name="text">
+         <string>画面共享</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="testButton">
         <property name="text">
          <string>test</string>
@@ -57,7 +64,18 @@
      </layout>
     </item>
     <item>
-     <widget class="QTextEdit" name="textEdit"/>
+     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,3">
+      <item>
+       <widget class="QTextEdit" name="textEdit"/>
+      </item>
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>TextLabel</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
@@ -67,7 +85,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>21</height>
+     <height>20</height>
     </rect>
    </property>
   </widget>

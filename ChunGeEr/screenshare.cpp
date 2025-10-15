@@ -177,6 +177,7 @@ void ScreenShare::startShare(const QString &ip)
     if(isMaster)
     {
         websocket_server_run(&server, 0);
+        start();
     }
     else
     {

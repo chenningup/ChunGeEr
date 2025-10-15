@@ -1,5 +1,7 @@
 #include "encodingmanager.h"
 #include <QDebug>
+#include <QApplication>
+#include <QScreen>
 EncodingManager::EncodingManager(QObject *parent)
     : QThread{parent}
 {
@@ -16,14 +18,26 @@ void EncodingManager::init()
 {
     // 查找 H.264 编码器（可使用硬件加速编码器，如 "h264_nvenc"）
     const AVCodec* codec = avcodec_find_encoder_by_name("libx264");
+
+    //const AVCodec* codec = avcodec_find_encoder_by_name("libx265");
+
     if (!codec)
         return ;
 
     m_codecContext = avcodec_alloc_context3(codec);
 
+
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    if (primaryScreen) {
+        qDebug() << "主屏幕分辨率:"
+                 << primaryScreen->size().width() << "x"
+                 << primaryScreen->size().height();
+    }
+
+
     // 配置编码器参数 [5](@ref)
-    m_codecContext->width = 3840;
-    m_codecContext->height = 2160;
+    m_codecContext->width = primaryScreen->size().width();
+    m_codecContext->height = primaryScreen->size().height();
     m_codecContext->time_base = {1, 30};
     m_codecContext->framerate = {30, 1};
     m_codecContext->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -32,6 +46,10 @@ void EncodingManager::init()
     m_codecContext->has_b_frames = 0;
     m_codecContext->gop_size = 30;             // GOP长度
     m_codecContext->flags |= AV_CODEC_FLAG_LOW_DELAY; // 低延迟
+
+//    av_opt_set(m_codecContext->priv_data, "preset", "fast", 0);      // 编码速度/质量权衡
+//    av_opt_set(m_codecContext->priv_data, "tune", "zerolatency", 0);// 低延迟优化
+//    av_opt_set(m_codecContext->priv_data, "x265-params", "crf=23:ref=3", 0);
 
     if (avcodec_open2(m_codecContext, codec, nullptr) < 0)
         return ;

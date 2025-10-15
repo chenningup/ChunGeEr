@@ -12,6 +12,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libswscale/swscale.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/opt.h>
 }
 #include "screencapturemanager.h"
 #include "safepacket.h"

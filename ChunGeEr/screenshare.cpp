@@ -8,9 +8,9 @@
 #include "encodingmanager.h"
 #include <QImage>
 #include "Detector/detectormanager.h"
-static WebSocketService ws;
-static websocket_server_t server;
-static hv::WebSocketClient wsClient;
+static WebSocketService ScreenShareWs;
+static websocket_server_t ScreenShareServer;
+static hv::WebSocketClient ScreenShareWsClient;
 static QList<WebSocketChannelPtr>clientList;
 
 ScreenShare::ScreenShare(QObject *parent)
@@ -27,15 +27,15 @@ ScreenShare &ScreenShare::Instance()
 
 void ScreenShare::init()
 {
-    server.port = 9999;
-    server.ws = &ws;
-    ws.onopen = [this](const WebSocketChannelPtr &channel, const HttpRequestPtr &req) {
+    ScreenShareServer.port = 9999;
+    ScreenShareServer.ws = &ScreenShareWs;
+    ScreenShareWs.onopen = [this](const WebSocketChannelPtr &channel, const HttpRequestPtr &req) {
         // 转发到类成员
         qDebug()<<"connect";
         clientList.push_back(channel);
     };
 
-    ws.onmessage = [this](const WebSocketChannelPtr &channel, const std::string &msg) {
+    ScreenShareWs.onmessage = [this](const WebSocketChannelPtr &channel, const std::string &msg) {
 
         const char* p = (const  char*)msg.data();
         std::shared_ptr<QByteArray> data = std::make_shared<QByteArray>(p,msg.size());
@@ -45,7 +45,7 @@ void ScreenShare::init()
         mScreenSem.release();
     };
 
-    ws.onclose = [this](const WebSocketChannelPtr &channel) {
+    ScreenShareWs.onclose = [this](const WebSocketChannelPtr &channel) {
         for (int i = 0; i < clientList.size(); ++i)
         {
             if(clientList[i].get() == channel.get())
@@ -56,12 +56,12 @@ void ScreenShare::init()
         }
     };
     // client 端的回调（通常 onopen/onmessage/onclose 的签名不同，按 hv 的定义写）
-    wsClient.onopen = [this]()
+    ScreenShareWsClient.onopen = [this]()
     {
 
     };
 
-    wsClient.onmessage = [this](const std::string &msg)
+    ScreenShareWsClient.onmessage = [this](const std::string &msg)
     {
         if(msg.empty())
         {
@@ -73,7 +73,7 @@ void ScreenShare::init()
         // qDebug()<<QString::fromStdString(msg);
     };
 
-    wsClient.onclose = [this]()
+    ScreenShareWsClient.onclose = [this]()
     {
     };
 
@@ -226,7 +226,7 @@ void ScreenShare::startShare()
     isShare = true;
     if(isMaster)
     {
-        websocket_server_run(&server, 0);
+        websocket_server_run(&ScreenShareServer, 0);
         start();
     }
     else
@@ -236,8 +236,8 @@ void ScreenShare::startShare()
         reconn_setting_init(&reconn);
         reconn.min_delay = 1000;
         reconn.max_delay = 5000;
-        wsClient.setReconnect(&reconn);
-        wsClient.open(url.toStdString().data());
+        ScreenShareWsClient.setReconnect(&reconn);
+        ScreenShareWsClient.open(url.toStdString().data());
         connect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen,Qt::QueuedConnection);
     }
 }
@@ -246,11 +246,11 @@ void ScreenShare::stopShare()
 {
     if(isMaster)
     {
-        websocket_server_stop(&server);
+        websocket_server_stop(&ScreenShareServer);
     }
     else
     {
-        wsClient.close();
+        ScreenShareWsClient.close();
         disconnect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen);
     }
 
@@ -260,6 +260,6 @@ void ScreenShare::receiveCaptureScreen(std::shared_ptr<SafePacket> data)
 {
     if(data)
     {
-        wsClient.send((const char*)data->get()->data, data->get()->size);
+        ScreenShareWsClient.send((const char*)data->get()->data, data->get()->size);
     }
 }

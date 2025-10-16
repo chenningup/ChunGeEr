@@ -89,6 +89,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         encodingmanager.h encodingmanager.cpp
         safepacket.h safepacket.cpp
         screenshare.h screenshare.cpp
+        Detector/detectormanager.h Detector/detectormanager.cpp
+        service/CatchMonsters/catchmonstersservice.h service/CatchMonsters/catchmonstersservice.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET ChunGeEr APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

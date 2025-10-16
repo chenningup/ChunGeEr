@@ -29,8 +29,10 @@ void WsManager::init()
     server.ws = &ws;
     ws.onopen = [this](const WebSocketChannelPtr &channel, const HttpRequestPtr &req) {
         // 转发到类成员
-        qDebug()<<"connect";
+        //qDebug()<<"connect";
+        std::string ip = req->client_addr.ip;
         clientList.push_back(channel);
+        emit ServerRecClientConnect(QString::fromStdString(ip));
     };
 
     ws.onmessage = [this](const WebSocketChannelPtr &channel, const std::string &msg) {
@@ -47,6 +49,7 @@ void WsManager::init()
         {
             if(clientList[i].get() == channel.get())
             {
+                emit ServerRecClientDisConnect("");
                 clientList.removeAt(i);
                 break;
             }
@@ -55,7 +58,7 @@ void WsManager::init()
     // client 端的回调（通常 onopen/onmessage/onclose 的签名不同，按 hv 的定义写）
     wsClient.onopen = [this]()
     {
-
+        emit clientConnectToServer();
     };
 
     wsClient.onmessage = [this](const std::string &msg)
@@ -72,6 +75,7 @@ void WsManager::init()
 
     wsClient.onclose = [this]()
     {
+        emit clientDisConnectToServer();
     };
 
 }
@@ -90,6 +94,12 @@ void WsManager::stopServer()
 
 void WsManager::startClient(const QString &url)
 {
+    reconn_setting_t reconn;
+    reconn_setting_init(&reconn);
+    reconn.min_delay = 1000;
+    reconn.max_delay = 5000;
+    reconn.max_retry_cnt = 0;
+    wsClient.setReconnect(&reconn);
     wsClient.open(url.toStdString().data());
 }
 

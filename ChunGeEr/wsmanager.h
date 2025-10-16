@@ -30,6 +30,10 @@ public:
 
     void sendMsgToServer(const std::string &msg);
 signals:
+    void clientConnectToServer();
+    void clientDisConnectToServer();
+    void ServerRecClientConnect(QString ip);
+    void ServerRecClientDisConnect(QString ip);
     void clientRecMeg(const json &msg);
 private:
 

@@ -9,23 +9,54 @@
 #include "encodingmanager.h"
 #include "StorageVidoeManager.h"
 #include "screenshare.h"
+#include "Detector/detectormanager.h"
+#include <QSettings>
+#include <QDebug>
 bool isMaster;
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    ui->lineEdit->setText("10.8.0.3");
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
-    //StorageVidoeManager::Instance().init();
+
+
+    QSettings settings("config.ini", QSettings::IniFormat);
+
+
+    // 2. 读取配置项
+    QString Type = settings.value("General/Type").toString();
+    isMaster = Type == "Server";
+    WsManager::Instance().init();
+    if(isMaster)
+    {
+       WsManager::Instance().startServer();
+    }
+    else
+    {
+       QString serverip = settings.value("Client/ServerIp").toString();
+       QString url = "ws://"+serverip+":7777";
+       WsManager::Instance().startClient(url);
+    }
+    // 3. 打印读取的值
+    qDebug() << "AppName:" << Type;
+
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
     EncodingManager::Instance().init();
     StorageVidoeManager::Instance().init();
-    WsManager::Instance().init();
     ScreenShare::Instance().init();
+    DetectorManager::Instance().init("best.onnx","data.yaml");
+
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
+    connect(&WsManager::Instance(),&WsManager::clientConnectToServer,this,&MainWindow::clientConnectToServer,Qt::QueuedConnection);
+    connect(&WsManager::Instance(),&WsManager::clientDisConnectToServer,this,&MainWindow::clientDisConnectToServer,Qt::QueuedConnection);
+    connect(&WsManager::Instance(),&WsManager::ServerRecClientConnect,this,&MainWindow::ServerRecClientConnect,Qt::QueuedConnection);
+    connect(&WsManager::Instance(),&WsManager::ServerRecClientDisConnect,this,&MainWindow::ServerRecClientDisConnect,Qt::QueuedConnection);
     connect(&ScreenShare::Instance(),&ScreenShare::showScreen,this,&MainWindow::screenShowSlot,Qt::QueuedConnection);
+    ScreenCaptureManager::Instance().startCapture();
+
+
     //MouseKeyboardManager::Instance().clickButton("abcdef");
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
@@ -48,70 +79,6 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
-
-void MainWindow::on_clientRadioButton_clicked()
-{
-    isMaster = false;
-    ui->clickPushButton->setText("连接");
-}
-
-
-void MainWindow::on_serverRadioButton_clicked()
-{
-    isMaster = true;
-    ui->clickPushButton->setText("监听");
-}
-
-
-void MainWindow::on_clickPushButton_clicked()
-{
-    qDebug()<<"on_clickPushButton_clicked";
-    QObject *senderObj = sender();
-    // 2. 安全地转换为具体的按钮类型
-    QPushButton *clickedButton = qobject_cast<QPushButton*>(senderObj);
-
-    if (!clickedButton)
-    {
-        qDebug() << "Button clicked:" << clickedButton->text();
-        return;// 转换成功，确认发送者是 QPushButton
-        // 根据不同的按钮进行不同的处理
-    }
-    if(isMaster)
-    {
-        if (clickedButton->text() == "监听")
-        {
-            qDebug()<<"run server";
-            clickedButton->setText("结束");
-            WsManager::Instance().startServer();
-        }
-        else if (clickedButton->text() == "结束")
-        {
-            qDebug()<<"stop server";
-            WsManager::Instance().stopServer();
-            clickedButton->setText("监听");
-        }
-    }
-    else
-    {
-        if (clickedButton->text() == "连接")
-        {
-            qDebug()<<"run server";
-            QString ip = ui->lineEdit->text();
-            QString url = "ws://"+ip+":7777";
-            WsManager::Instance().startClient(url);
-            ScreenCaptureManager::Instance().startCapture();
-            clickedButton->setText("结束");
-        }
-        else if (clickedButton->text() == "结束")
-        {
-            qDebug()<<"stop server";
-            WsManager::Instance().stopClient();
-            ScreenCaptureManager::Instance().stopCapture();
-            clickedButton->setText("连接");
-        }
-    }
-}
-
 
 void MainWindow::on_testButton_clicked()
 {
@@ -155,7 +122,7 @@ void MainWindow::on_screenShareButton_clicked()
     {
         clickedButton->setText("结束");
         EncodingManager::Instance().startEncodeing();
-        ScreenShare::Instance().startShare(ui->lineEdit->text());
+        //ScreenShare::Instance().startShare(ui->lineEdit->text());
     }
     else if (clickedButton->text() == "结束")
     {
@@ -168,5 +135,25 @@ void MainWindow::on_screenShareButton_clicked()
 void MainWindow::screenShowSlot(QImage pic)
 {
     ui->label->setPixmap(QPixmap::fromImage(pic));
+}
+
+void MainWindow::clientConnectToServer()
+{
+    ui->statuslabel->setText("已连接");
+}
+
+void MainWindow::clientDisConnectToServer()
+{
+    ui->statuslabel->setText("已断开");
+}
+
+void MainWindow::ServerRecClientConnect(QString ip)
+{
+    ui->statuslabel->setText("已连接");
+}
+
+void MainWindow::ServerRecClientDisConnect(QString ip)
+{
+    ui->statuslabel->setText("已断开");
 }
 

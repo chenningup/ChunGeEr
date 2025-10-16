@@ -197,8 +197,6 @@ void Detector(YOLO_V8*& p) {
                     cv::Scalar(0, 0, 0),
                     2
                     );
-
-
             }
             std::cout << "Press any key to exit" << std::endl;
             cv::imshow("Result of Detection", img);
@@ -245,8 +243,6 @@ void Classifier(YOLO_V8*& p)
 
     }
 }
-
-
 
 int ReadCocoYaml(YOLO_V8*& p) {
     // Open the YAML file

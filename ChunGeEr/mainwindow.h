@@ -17,16 +17,17 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 private slots:
-    void on_clientRadioButton_clicked();
-    void on_serverRadioButton_clicked();
-    void on_clickPushButton_clicked();
 
     void on_testButton_clicked();
     void clientRecMegSlot(const json &msg);
     void on_screenShareButton_clicked();
 
-
     void screenShowSlot(QImage pic);
+
+    void clientConnectToServer();
+    void clientDisConnectToServer();
+    void ServerRecClientConnect(QString ip);
+    void ServerRecClientDisConnect(QString ip);
 private:
     Ui::MainWindow *ui;
 

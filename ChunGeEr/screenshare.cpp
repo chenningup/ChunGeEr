@@ -122,7 +122,6 @@ void ScreenShare::init()
 extern bool isMaster;
 void ScreenShare::run()
 {
-    cv::namedWindow("Live", cv::WINDOW_NORMAL);
     while(isShare)
     {
         mScreenSem.acquire();
@@ -155,8 +154,10 @@ void ScreenShare::run()
             {
                 sws_ctx = sws_getContext(
                     frame->width, frame->height, (AVPixelFormat)frame->format,
-                    frame->width, frame->height, AV_PIX_FMT_BGR24,
+                    frame->width, frame->height, AV_PIX_FMT_RGB32,
                     SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+                // cv::mat need AV_PIX_FMT_BGR24
             }
 
             // 2. 转换格式到QImage

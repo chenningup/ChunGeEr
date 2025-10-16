@@ -19,7 +19,7 @@ ScreenCaptureManager &ScreenCaptureManager::Instance()
     static ScreenCaptureManager mScreenCaptureManager;
     return mScreenCaptureManager;
 }
-static int num = 0;
+static QDateTime lastTime;
 void ScreenCaptureManager::run()
 {
     // 1. Create D3D11 Device
@@ -51,9 +51,21 @@ void ScreenCaptureManager::run()
     //qDebug() << "4" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
 
     framePool.FrameArrived([&](auto const &sender, auto const &args) {
-        QDateTime time = QDateTime::currentDateTime();
+        if(!lastTime.isValid())
+        {
+            lastTime = QDateTime::currentDateTime();
+        }
+        else
+        {
+            QDateTime curTime = QDateTime::currentDateTime();
+            if(lastTime.msecsTo(curTime) < 30)
+            {
+                return;
+            }
+            lastTime = curTime;
+        }
         //qDebug() << "5" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")<<num;
-        num++;
+        //num++;
         auto frame = sender.TryGetNextFrame();
         if (frame) {
             try {

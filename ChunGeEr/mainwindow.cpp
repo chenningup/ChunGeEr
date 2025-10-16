@@ -146,6 +146,12 @@ void MainWindow::on_screenShareButton_clicked()
     {
         clickedButton->setText("画面共享");
         ScreenShare::Instance().stopShare();
+        json cmd ;
+        cmd["cmd"] = "ShareScreen";
+        json data;
+        data["OperateType"] = "Stop";
+        cmd["data"] = data;
+        WsManager::Instance().sendMsgToClient(cmd.dump());
     }
 }
 

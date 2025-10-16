@@ -98,7 +98,6 @@ void WsManager::startClient(const QString &url)
     reconn_setting_init(&reconn);
     reconn.min_delay = 1000;
     reconn.max_delay = 5000;
-    reconn.max_retry_cnt = 0;
     wsClient.setReconnect(&reconn);
     wsClient.open(url.toStdString().data());
 }

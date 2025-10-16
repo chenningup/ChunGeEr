@@ -20,27 +20,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
 
-
-    QSettings settings("config.ini", QSettings::IniFormat);
-
-
-    // 2. 读取配置项
-    QString Type = settings.value("General/Type").toString();
-    isMaster = Type == "Server";
-    WsManager::Instance().init();
-    if(isMaster)
-    {
-       WsManager::Instance().startServer();
-    }
-    else
-    {
-       QString serverip = settings.value("Client/ServerIp").toString();
-       QString url = "ws://"+serverip+":7777";
-       WsManager::Instance().startClient(url);
-    }
-    // 3. 打印读取的值
-    qDebug() << "AppName:" << Type;
-
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
     EncodingManager::Instance().init();
@@ -54,8 +33,25 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&WsManager::Instance(),&WsManager::ServerRecClientConnect,this,&MainWindow::ServerRecClientConnect,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::ServerRecClientDisConnect,this,&MainWindow::ServerRecClientDisConnect,Qt::QueuedConnection);
     connect(&ScreenShare::Instance(),&ScreenShare::showScreen,this,&MainWindow::screenShowSlot,Qt::QueuedConnection);
-    ScreenCaptureManager::Instance().startCapture();
 
+    QSettings settings("config.ini", QSettings::IniFormat);
+    // 2. 读取配置项
+    QString Type = settings.value("Basic/Type").toString();
+    isMaster = Type == "Server";
+    WsManager::Instance().init();
+    if(isMaster)
+    {
+        WsManager::Instance().startServer();
+    }
+    else
+    {
+        QString serverip = settings.value("Client/ServerIp").toString();
+        QString url = "ws://"+serverip+":7777";
+        WsManager::Instance().startClient(url);
+        ScreenCaptureManager::Instance().startCapture();
+    }
+    // 3. 打印读取的值
+    qDebug() << "AppName:" << Type;
 
     //MouseKeyboardManager::Instance().clickButton("abcdef");
     //MouseKeyboardManager::Instance().clickButton(" ");

@@ -219,8 +219,8 @@ void ScreenShare::run()
         }
     }
 }
-
-void ScreenShare::startShare(const QString &ip)
+extern QString serverIp;
+void ScreenShare::startShare()
 {
     isShare = true;
     if(isMaster)
@@ -230,7 +230,12 @@ void ScreenShare::startShare(const QString &ip)
     }
     else
     {
-        QString url = "ws://"+ip+":9999";
+        QString url = "ws://"+serverIp+":9999";
+        reconn_setting_t reconn;
+        reconn_setting_init(&reconn);
+        reconn.min_delay = 1000;
+        reconn.max_delay = 5000;
+        wsClient.setReconnect(&reconn);
         wsClient.open(url.toStdString().data());
         connect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen,Qt::QueuedConnection);
     }

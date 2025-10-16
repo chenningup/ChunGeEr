@@ -26,7 +26,7 @@ public:
 
     void run();
 
-    void startShare(const QString &ip);
+    void startShare();
 
     void stopShare();
 

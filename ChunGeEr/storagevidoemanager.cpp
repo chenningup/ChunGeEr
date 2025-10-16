@@ -32,7 +32,6 @@ void StorageVidoeManager::run()
         mScreenMutex.unlock();
         if(tmp && tmp->valid())
         {
-
             // 成功接收到编码包，写入文件
             av_packet_rescale_ts(tmp->get(), EncodingManager::Instance().getAVCodecContext()->time_base, m_stream->time_base);
             tmp->get()->stream_index = m_stream->index;

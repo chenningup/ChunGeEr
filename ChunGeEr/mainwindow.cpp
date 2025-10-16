@@ -13,6 +13,7 @@
 #include <QSettings>
 #include <QDebug>
 bool isMaster;
+QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -45,10 +46,11 @@ MainWindow::MainWindow(QWidget *parent)
     }
     else
     {
-        QString serverip = settings.value("Client/ServerIp").toString();
-        QString url = "ws://"+serverip+":7777";
+        serverIp = settings.value("Client/ServerIp").toString();
+        QString url = "ws://"+serverIp+":7777";
         WsManager::Instance().startClient(url);
         ScreenCaptureManager::Instance().startCapture();
+        ui->screenShareButton->hide();
     }
     // 3. 打印读取的值
     qDebug() << "AppName:" << Type;
@@ -103,7 +105,22 @@ void MainWindow::clientRecMegSlot(const json &msg)
                 service->startService();
                 mService = service;
             }
+            return;
             //qDebug()<<"click key "<< key;
+        }
+        if(cmd == "ShareScreen")
+        {
+            std::string serviceName = msg["data"]["OperateType"].get<std::string>();
+            if(serviceName == "Start")
+            {
+                EncodingManager::Instance().startEncodeing();
+                ScreenShare::Instance().startShare();
+            }
+            else
+            {
+                EncodingManager::Instance().stopEncodeing();
+                ScreenShare::Instance().stopShare();
+            }
         }
     }
 }
@@ -117,13 +134,17 @@ void MainWindow::on_screenShareButton_clicked()
     if (clickedButton->text() == "画面共享")
     {
         clickedButton->setText("结束");
-        EncodingManager::Instance().startEncodeing();
-        //ScreenShare::Instance().startShare(ui->lineEdit->text());
+        ScreenShare::Instance().startShare();
+        json cmd ;
+        cmd["cmd"] = "ShareScreen";
+        json data;
+        data["OperateType"] = "Start";
+        cmd["data"] = data;
+        WsManager::Instance().sendMsgToClient(cmd.dump());
     }
     else if (clickedButton->text() == "结束")
     {
         clickedButton->setText("画面共享");
-        EncodingManager::Instance().stopEncodeing();
         ScreenShare::Instance().stopShare();
     }
 }

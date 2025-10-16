@@ -25,7 +25,9 @@ void BaseService::handlePressEvent(int vkCode)
 
 void BaseService::receiveCaptureScreen(ScreenCaptureManager::ScreenData data)
 {
-    curPic = data.data;
+    picMutex.lock();
+    curPic = data;
+    picMutex.unlock();
 }
 
 void BaseService::clientRecMegSlot(const json &msg)

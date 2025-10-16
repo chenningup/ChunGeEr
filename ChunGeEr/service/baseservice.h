@@ -4,6 +4,7 @@
 #include <QThread>
 #include "screencapturemanager.h"
 #include "../wsmanager.h"
+#include <QMutex>
 class BaseService : public QThread
 {
     Q_OBJECT
@@ -26,9 +27,11 @@ public slots:
     void clientRecMegSlot(const json &msg);
     void keyPressEventSlot(int vkCode);
 public:
-    std::shared_ptr<std::vector<uint8_t>> curPic;
+    ScreenCaptureManager::ScreenData curPic;
+    //std::shared_ptr<std::vector<uint8_t>> curPic;
     bool toRun;
     QStringList tasks;
+    QMutex picMutex;
 };
 
 #endif // BASESERVICE_H

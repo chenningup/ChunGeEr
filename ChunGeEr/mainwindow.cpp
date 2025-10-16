@@ -6,6 +6,7 @@
 
 #include "wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
+#include "service/CatchMonsters/catchmonstersservice.h"
 #include "encodingmanager.h"
 #include "StorageVidoeManager.h"
 #include "screenshare.h"
@@ -82,8 +83,10 @@ void MainWindow::on_testButton_clicked()
 {
 //    ServerDungeonService *serivce = new ServerDungeonService();
 //    serivce->startService();
-    StorageVidoeManager::Instance().stopSaveVideo();
-    EncodingManager::Instance().stopEncodeing();
+    // StorageVidoeManager::Instance().stopSaveVideo();
+    // EncodingManager::Instance().stopEncodeing();
+    CatchMonstersService *service = new CatchMonstersService();
+    service->startService();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)

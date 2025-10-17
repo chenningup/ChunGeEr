@@ -246,7 +246,7 @@ void Classifier(YOLO_V8*& p)
 
 int ReadCocoYaml(YOLO_V8*& p) {
     // Open the YAML file
-    std::ifstream file("coco.yaml");
+    std::ifstream file("data.yaml");
     if (!file.is_open())
     {
         std::cerr << "Failed to open file" << std::endl;
@@ -298,9 +298,9 @@ void DetectTest()
     YOLO_V8* yoloDetector = new YOLO_V8;
     ReadCocoYaml(yoloDetector);
     DL_INIT_PARAM params;
-    params.rectConfidenceThreshold = 0.1;
+    params.rectConfidenceThreshold = 0.05;
     params.iouThreshold = 0.5;
-    params.modelPath = "yolo11n.onnx";
+    params.modelPath = "best.onnx";
     params.imgSize = { 640, 640 };
 #ifdef USE_CUDA
     params.cudaEnable = true;

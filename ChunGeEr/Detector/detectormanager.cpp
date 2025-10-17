@@ -66,10 +66,10 @@ void DetectorManager::init(const QString &onnx, const QString &yamlPath)
     yoloDetector->classes = names;
 
     DL_INIT_PARAM params;
-    params.rectConfidenceThreshold = 0.1;
+    params.rectConfidenceThreshold = 0.5;
     params.iouThreshold = 0.5;
     params.modelPath = onnx.toStdString();
-    params.imgSize = { 640, 640 };
+    params.imgSize = { 1024, 1024 };
 #ifdef USE_CUDA
     params.cudaEnable = true;
 

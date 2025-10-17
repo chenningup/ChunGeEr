@@ -28,7 +28,8 @@ void EncodingManager::init()
 
 
     QScreen *primaryScreen = QGuiApplication::primaryScreen();
-    if (primaryScreen) {
+    if (primaryScreen)
+    {
         qDebug() << "主屏幕分辨率:"
                  << primaryScreen->size().width() << "x"
                  << primaryScreen->size().height();
@@ -144,17 +145,17 @@ void EncodingManager::stopEncodeing()
     isEncoding = false;
     mScreenSem.release(); // 确保线程退出等待
 
-    wait(); // 等待线程结束
+    //wait(); // 等待线程结束
 
     // 按分配顺序逆序释放资源
-    if (m_swsContext) {
-        sws_freeContext(m_swsContext);
-        m_swsContext = nullptr;
-    }
+//    if (m_swsContext) {
+//        sws_freeContext(m_swsContext);
+//        m_swsContext = nullptr;
+//    }
 
-    if (m_codecContext) {
-        avcodec_free_context(&m_codecContext);
-    }
+//    if (m_codecContext) {
+//        avcodec_free_context(&m_codecContext);
+//    }
 
 }
 

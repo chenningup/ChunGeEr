@@ -28,7 +28,7 @@ ScreenShare &ScreenShare::Instance()
 
 void ScreenShare::init()
 {
-    ScreenShareServer.port = 9999;
+    ScreenShareServer.port = 6868;
     ScreenShareServer.ws = &ScreenShareWs;
     ScreenShareWs.onopen = [this](const WebSocketChannelPtr &channel, const HttpRequestPtr &req) {
         // 转发到类成员
@@ -87,7 +87,7 @@ void ScreenShare::init()
     }
     else
     {
-        QString url = "ws://"+serverIp+":9999";
+        QString url = "ws://"+serverIp+":6868";
         reconn_setting_t reconn;
         reconn_setting_init(&reconn);
         reconn.min_delay = 1000;

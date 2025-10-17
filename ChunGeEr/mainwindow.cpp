@@ -22,6 +22,11 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
 
+    QSettings settings("config.ini", QSettings::IniFormat);
+    // 2. 读取配置项
+    QString Type = settings.value("Basic/Type").toString();
+    isMaster = Type == "Server";
+    serverIp = settings.value("Client/ServerIp").toString();
     ScreenCaptureManager::Instance().init();
     MouseKeyboardManager::Instance().init();
     EncodingManager::Instance().init();
@@ -36,10 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&WsManager::Instance(),&WsManager::ServerRecClientDisConnect,this,&MainWindow::ServerRecClientDisConnect,Qt::QueuedConnection);
     connect(&ScreenShare::Instance(),&ScreenShare::showScreen,this,&MainWindow::screenShowSlot,Qt::QueuedConnection);
 
-    QSettings settings("config.ini", QSettings::IniFormat);
-    // 2. 读取配置项
-    QString Type = settings.value("Basic/Type").toString();
-    isMaster = Type == "Server";
+
     WsManager::Instance().init();
     if(isMaster)
     {
@@ -47,7 +49,6 @@ MainWindow::MainWindow(QWidget *parent)
     }
     else
     {
-        serverIp = settings.value("Client/ServerIp").toString();
         QString url = "ws://"+serverIp+":7777";
         WsManager::Instance().startClient(url);
         ScreenCaptureManager::Instance().startCapture();
@@ -85,8 +86,8 @@ void MainWindow::on_testButton_clicked()
 //    serivce->startService();
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
-    CatchMonstersService *service = new CatchMonstersService();
-    service->startService();
+//    CatchMonstersService *service = new CatchMonstersService();
+//    service->startService();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)

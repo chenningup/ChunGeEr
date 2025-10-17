@@ -12,7 +12,8 @@ static WebSocketService ScreenShareWs;
 static websocket_server_t ScreenShareServer;
 static hv::WebSocketClient ScreenShareWsClient;
 static QList<WebSocketChannelPtr>clientList;
-
+extern bool isMaster;
+extern QString serverIp;
 ScreenShare::ScreenShare(QObject *parent)
     : QThread{parent}
 {
@@ -36,7 +37,10 @@ void ScreenShare::init()
     };
 
     ScreenShareWs.onmessage = [this](const WebSocketChannelPtr &channel, const std::string &msg) {
-
+        if(!isShare)
+        {
+            return;
+        }
         const char* p = (const  char*)msg.data();
         std::shared_ptr<QByteArray> data = std::make_shared<QByteArray>(p,msg.size());
         mScreenMutex.lock();
@@ -76,6 +80,23 @@ void ScreenShare::init()
     ScreenShareWsClient.onclose = [this]()
     {
     };
+
+    if(isMaster)
+    {
+        websocket_server_run(&ScreenShareServer, 0);
+    }
+    else
+    {
+        QString url = "ws://"+serverIp+":9999";
+        reconn_setting_t reconn;
+        reconn_setting_init(&reconn);
+        reconn.min_delay = 1000;
+        reconn.max_delay = 5000;
+        ScreenShareWsClient.setReconnect(&reconn);
+        ScreenShareWsClient.open(url.toStdString().data());
+    }
+
+
 
     // 1. 查找H.264解码器
     const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
@@ -119,7 +140,7 @@ void ScreenShare::init()
     }
 
 }
-extern bool isMaster;
+
 void ScreenShare::run()
 {
     while(isShare)
@@ -220,37 +241,31 @@ void ScreenShare::run()
         }
     }
 }
-extern QString serverIp;
+
 void ScreenShare::startShare()
 {
     isShare = true;
     if(isMaster)
     {
-        websocket_server_run(&ScreenShareServer, 0);
+        //websocket_server_run(&ScreenShareServer, 0);
         start();
     }
     else
     {
-        QString url = "ws://"+serverIp+":9999";
-        reconn_setting_t reconn;
-        reconn_setting_init(&reconn);
-        reconn.min_delay = 1000;
-        reconn.max_delay = 5000;
-        ScreenShareWsClient.setReconnect(&reconn);
-        ScreenShareWsClient.open(url.toStdString().data());
         connect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen,Qt::QueuedConnection);
     }
 }
 
 void ScreenShare::stopShare()
 {
+    isShare = false;
     if(isMaster)
     {
-        websocket_server_stop(&ScreenShareServer);
+        mScreenSem.release();
+        //websocket_server_stop(&ScreenShareServer);
     }
     else
     {
-        ScreenShareWsClient.close();
         disconnect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen);
     }
 

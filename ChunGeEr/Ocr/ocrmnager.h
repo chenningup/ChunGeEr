@@ -1,6 +1,6 @@
 #ifndef OCRMNAGER_H
 #define OCRMNAGER_H
-
+#include <opencv2/opencv.hpp>
 #include <QObject>
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
@@ -13,12 +13,13 @@ public:
     static OcrMnager&Instance();
 
     void init();
+
+    QString identify(cv::Mat &pic);
 signals:
 
 private:
 
     tesseract::TessBaseAPI tess;
-
 };
 
 #endif // OCRMNAGER_H

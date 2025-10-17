@@ -2,7 +2,7 @@
 setlocal
 
 :: 修改成你 Tesseract 的安装目录
-set TESSERACT_PATH=D:\Program Files\Tesseract-OCR
+set TESSERACT_PATH=D:\\Program Files\\Tesseract-OCR
 set PATH=%TESSERACT_PATH%;%PATH%
 
 echo === Step 1: 生成 .tr 文件 ===
@@ -34,7 +34,7 @@ for %%f in (*.tr) do (
     echo 正在处理 %%f ...
     cntraining %%f 
 )
-
+combine_tessdata chi_sim_custom
 echo === Step 6: 生成语言文件 ===
 rename inttemp chi_sim_custom.inttemp
 rename normproto chi_sim_custom.normproto

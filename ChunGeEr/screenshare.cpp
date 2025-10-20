@@ -95,9 +95,6 @@ void ScreenShare::init()
         ScreenShareWsClient.setReconnect(&reconn);
         ScreenShareWsClient.open(url.toStdString().data());
     }
-
-
-
     // 1. 查找H.264解码器
     const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
     if (!codec)
@@ -165,7 +162,7 @@ void ScreenShare::run()
         if (avcodec_send_packet(codec_ctx, pkt) < 0)
         {
             qDebug() << "发送数据包失败";
-            return;
+            continue;
         }
 
         // 3. 接收解码后的帧
@@ -278,3 +275,4 @@ void ScreenShare::receiveCaptureScreen(std::shared_ptr<SafePacket> data)
         ScreenShareWsClient.send((const char*)data->get()->data, data->get()->size);
     }
 }
+

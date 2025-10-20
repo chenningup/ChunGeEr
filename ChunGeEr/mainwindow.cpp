@@ -13,6 +13,7 @@
 #include "Detector/detectormanager.h"
 #include <QSettings>
 #include <QDebug>
+#include <windows.h>
 bool isMaster;
 QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
@@ -132,6 +133,60 @@ void MainWindow::clientRecMegSlot(const json &msg)
                 EncodingManager::Instance().stopEncodeing();
                 ScreenShare::Instance().stopShare();
             }
+            return;
+        }
+        if(cmd == "MouseMoveSync")
+        {
+            int x = msg["data"]["x"].get<int>();
+            int y = msg["data"]["y"].get<int>();
+            SetCursorPos(x, y);
+            return;
+        }
+        if(cmd == "MouseClickSync")
+        {
+            int x = msg["data"]["x"].get<int>();
+            int y = msg["data"]["y"].get<int>();
+            SetCursorPos(x, y);
+
+            std::string type = msg["data"]["type"].get<std::string>();
+            if(type == "left")
+            {
+                INPUT inputs[2] = {0};
+                // 按下事件
+                inputs[0].type = INPUT_MOUSE;
+                inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+                // 释放事件
+                inputs[1].type = INPUT_MOUSE;
+                inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+                // 发送输入事件
+                SendInput(2, inputs, sizeof(INPUT));
+            }
+            else
+            {
+                INPUT inputs[2] = {0};
+                // 按下事件
+                inputs[0].type = INPUT_MOUSE;
+                inputs[0].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
+                // 释放事件
+                inputs[1].type = INPUT_MOUSE;
+                inputs[1].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
+                // 发送输入事件
+                SendInput(2, inputs, sizeof(INPUT));
+            }
+            return;
+        }
+        if( cmd == "KeybordSync" )
+        {
+            int key  = msg["data"]["Key"].get<int>();
+            INPUT ip;
+            ip.type = INPUT_KEYBOARD;
+            ip.ki.wVk = key; // 'A' 的虚拟键码
+            ip.ki.dwFlags = 0; // 0 表示按下
+            SendInput(1, &ip, sizeof(INPUT));
+
+            // 设置键盘释放事件
+            ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
+            SendInput(1, &ip, sizeof(INPUT));
         }
     }
 }

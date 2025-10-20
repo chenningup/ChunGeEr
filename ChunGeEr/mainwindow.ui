@@ -46,7 +46,7 @@
        <widget class="QTextEdit" name="textEdit"/>
       </item>
       <item>
-       <widget class="QLabel" name="label">
+       <widget class="MouseLabel" name="label">
         <property name="text">
          <string>TextLabel</string>
         </property>
@@ -62,12 +62,19 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>20</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>MouseLabel</class>
+   <extends>QLabel</extends>
+   <header location="global">Control/mouselabel.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

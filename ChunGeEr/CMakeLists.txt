@@ -77,6 +77,7 @@ set(PROJECT_SOURCES
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     find_package(Qt6 REQUIRED COMPONENTS Core)
     find_package(Qt6 REQUIRED COMPONENTS Core)
+    find_package(Qt6 REQUIRED COMPONENTS Core)
     qt_add_executable(ChunGeEr
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
@@ -92,7 +93,12 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Detector/detectormanager.h Detector/detectormanager.cpp
         service/CatchMonsters/catchmonstersservice.h service/CatchMonsters/catchmonstersservice.cpp
         Ocr/ocrmnager.h Ocr/ocrmnager.cpp
+        Control/mouselabel.h Control/mouselabel.cpp
     )
+target_include_directories(ChunGeEr PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Control
+)
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET ChunGeEr APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
 #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
@@ -136,6 +142,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         onnxruntime
         YoloOnnx
         opencv_dnn490d)
+target_link_libraries(ChunGeEr PRIVATE Qt6::Core)
 else()
     # Release 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)

@@ -61,13 +61,20 @@ MainWindow::MainWindow(QWidget *parent)
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
     //MouseKeyboardManager::Instance().humanMouseMove(10,10);
-   // QThread::sleep(5);
-    //MouseKeyboardManager::Instance().moveMouse(-25,-25);
+        QPoint current = QCursor::pos();
+        qDebug()<<"steps"<<current;
+    MouseKeyboardManager::Instance().moveMouse(-30,-30);
+    // while(true)
+    // {
+    //     QPoint current = QCursor::pos();
+    //     qDebug()<<"steps"<<current;
+         QThread::sleep(1);
+    // }
+        current = QCursor::pos();
+        qDebug()<<"steps"<<current;
     //MouseKeyboardManager::Instance().mouseDoubleClick();
     //MouseKeyboardManager::Instance().mouseRightClick();
-
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
-
     //EncodingManager::Instance().startEncodeing();
     //ScreenCaptureManager::Instance().startCapture();
     //StorageVidoeManager::Instance().startSaveVideo("D:\\asdfasdf.mp4");
@@ -86,8 +93,8 @@ void MainWindow::on_testButton_clicked()
 //    serivce->startService();
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
-//    CatchMonstersService *service = new CatchMonstersService();
-//    service->startService();
+   CatchMonstersService *service = new CatchMonstersService();
+   service->startService();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)

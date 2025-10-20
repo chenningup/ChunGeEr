@@ -1,16 +1,18 @@
 #include <Keyboard.h> // 包含键盘库，这是实现键盘模拟的核心[5](@ref)
 #include <Mouse.h>
-//6668 5b81
-// 定义串口通信的波特率
 #define SERIAL_BAUD_RATE 9600
 
-char buffer[100];
+unsigned char buffer[50];
+unsigned char *charptr= buffer;
 int pr = 0;
-
+int receiveDataCount = 0 ;
+int receiveDataIndex = 0 ;
 enum pasreDataStatus
 {
-    findHeadFirtst,
+    findHeadFirtst = 0,
 	findHeadSecond,
+    getReceiveDataCount,
+    receiveData,
     findEndFirtst,
 	findEndSecond,
 };
@@ -40,33 +42,34 @@ uint16_t crc_16(uint8_t *data, uint16_t len)
 
 
 void setup() {
-  // 初始化串口通信，用于接收来自电脑的指令[1](@ref)
+
   Serial.begin(SERIAL_BAUD_RATE);
   
-  // 初始化键盘控制
-  // 重要：只有 Leonardo, Micro, Due 等板卡支持此功能[1,5](@ref)
   Keyboard.begin();
   Mouse.begin();
-  // 可选：等待串口连接建立，确保通信稳定
-  // while (!Serial) {
-  //   delay(10);
-  // }
-  
+  while (!Serial) {
+    delay(10);
+  }
+    delay(1* 1000);
   Serial.println("Arduino Keyboard Emulator Ready.");
   Serial.println("Send commands like 'up', 'down', 'f1' via Serial Monitor.");
 }
 
 void loop() {
-  // 检查串口是否有数据到达[1](@ref)
   if (Serial.available() > 0) {
-
-    int inChar = Serial.read();
-
+    int inChar1  = Serial.read();
+    uint8_t inChar = (uint8_t)inChar1;
+    Serial.println("current char ");
+    Serial.println(inChar,HEX);
+    Serial.println("current pr ");
+    Serial.println(pr);
+    Serial.println("current status ");
+    Serial.println(status);
         switch(status)
         {
         case findHeadFirtst:
         {
-            if(inChar == 0X66)
+            if((unsigned int)inChar == 0X66)
             {
                 buffer[pr] = 0X66;
                 pr++;
@@ -76,11 +79,11 @@ void loop() {
         break;
         case findHeadSecond:
         {
-            if(inChar == 0X68)
+            if((unsigned int)inChar == 0X68)
             {
                 buffer[pr] = 0X68;
                 pr++;
-                status = findEndFirtst;
+                status = getReceiveDataCount;
             }
             else
             {
@@ -89,14 +92,44 @@ void loop() {
             }
         }
         break;
+        case getReceiveDataCount:
+        {
+            buffer[pr] = inChar;
+            receiveDataCount =  inChar;
+            status = receiveData;
+            receiveDataIndex = 0;
+            pr++;
+        }
+        break;
+        case receiveData:
+        {
+            buffer[pr] = inChar;
+            pr++;
+            receiveDataIndex++;
+            Serial.println("receiveDataIndex");
+            Serial.println(receiveDataIndex);
+            Serial.println("receiveDataCount");
+            Serial.println(receiveDataCount);
+            if(receiveDataIndex == receiveDataCount)
+            {
+                status = findEndFirtst;
+            }
+        }
+        break;
         case findEndFirtst:
         {
             buffer[pr] = inChar;
-            if(inChar == 0X5b)
+            pr++;
+            if(inChar == 0X5B)
             {
+                Serial.println("inChar == 0X5B");
                 status = findEndSecond;
             }
-            pr++;
+            else
+            {
+                status = findHeadFirtst;
+                pr=0;
+            }
         }
         break;
         case findEndSecond:
@@ -105,36 +138,49 @@ void loop() {
             pr++;
             if(inChar == 0X81)
             {
-                uint16_t crc = crc_16(&buffer[2],pr-2-2-2);
+                Serial.println(5);
+                Serial.println(pr);
+                for(int i = 0 ; i<pr ; i++)
+                {
+                    Serial.println(buffer[i],HEX);
+                }
+                uint16_t crc = crc_16(charptr+3,pr-2-2-3);
+                Serial.println(crc);
                 uint16_t recCrc;
                 memcpy(&recCrc, &buffer[pr-2-2], 2);
+                Serial.println(recCrc);
                 if (crc != recCrc)
                 {
+                    Serial.println(6);
                     pr=0;
                     status = findHeadFirtst;
                 }
                 else
                 {
-                    int cmd =  buffer[2];
+                    int cmd =  buffer[3];
                     if(cmd == 1)//键盘
                     {
-                        int size = buffer[3];
+                        int size = buffer[4];
                         for(int i = 0;i<size;i++)
                         {
-                            Keyboard.write(buffer[4+i]);
+                            Keyboard.write(buffer[5+i]);
                         }
                     }
                     if(cmd == 2)
                     {
-                        int type  = buffer[3];
+                        Serial.println("mouse move");
+                        int type  = buffer[4];
                         if(type == 1)
                         {
                             int32_t  x = 0;
-                            memcpy(&x, &buffer[4], 4);
+                            memcpy(&x, &buffer[5], 4);
                             int32_t  y = 0;
-                            memcpy(&y, &buffer[8], 4);
+                            memcpy(&y, &buffer[9], 4);
                             //Mouse.move(x, y, 0);
-                            Mouse.move(x, y, 0);
+                             Mouse.move((int8_t)x, (int8_t)y, 0); // 修正关键点
+                             Serial.println("X raw="); Serial.println(x);
+                             Serial.println("Y raw="); Serial.println(y);
+                             delay(50);
                         }
                         else if(type == 2)
                         {
@@ -158,26 +204,11 @@ void loop() {
             }
             else
             {
-                status = findEndFirtst;
+                status = findHeadFirtst;
                 pr=0;
             }
         }
         break;
         }
-    // 读取来自串口的字符串，直到遇到换行符'\n'
   }
-}
-
-/**
- * @brief 发送特殊按键信号的辅助函数
- * @param key 要发送的特殊按键键值（如 KEY_UP_ARROW）
- * 
- * 该函数模拟按下并释放一个特殊按键。
- * 使用 press 和 release 的组合是为了确保按键动作的完整性[8](@ref)。
- */
-void sendSpecialKey(uint8_t key) {
-  Keyboard.press(key);   // 按下指定的特殊按键
-  delay(50);            // 保持按下状态短暂时间，模拟真实按键
-  Keyboard.release(key); // 释放该按键[8](@ref)
-  // 也可以使用 Keyboard.releaseAll(); 但释放特定键更精确
 }

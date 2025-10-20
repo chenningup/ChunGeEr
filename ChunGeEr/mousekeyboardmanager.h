@@ -5,6 +5,7 @@
 #include <QSerialPort>
 #include <random>
 #include <cmath>
+#include <QTimer>
 #define KEY_LEFT_CTRL     0x80
 #define KEY_LEFT_SHIFT    0x81
 #define KEY_LEFT_ALT      0x82
@@ -105,12 +106,13 @@ public:
 signals:
 
 private:
-
+    void createPacket(char * dist,char * data,int datasize);
 private:
     QSerialPort serial;
 
     std::mt19937 rng;
     std::uniform_real_distribution<double> dist;
+     QTimer timer;
 };
 
 #endif // MOUSEKEYBOARDMANAGER_H

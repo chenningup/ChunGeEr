@@ -79,6 +79,7 @@ void CatchMonstersService::run()
                 // 截取 ROI
                 cv::Mat cormat = img1(ocr_rect).clone();
                 QString res = OcrMnager::Instance().identify(cormat);
+                qDebug()<<res;
             }
             cv::imshow("Live", img);
             cv::waitKey(1);

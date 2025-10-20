@@ -96,6 +96,13 @@ void MouseKeyboardManager::init()
         QByteArray Read_Buf=serial.readAll();
         qDebug()<<Read_Buf;
     });
+    connect(&timer, &QTimer::timeout, [&]() {
+        if (serial.bytesAvailable() > 0) {
+            QByteArray data = serial.readAll();
+            qDebug() << "接收到数据:" << data;
+        }
+    });
+    timer.start();
 }
 
 void MouseKeyboardManager::clickButton(const QString &button)
@@ -110,16 +117,17 @@ void MouseKeyboardManager::clickButton(const QString &button)
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
-    key[2] = 0x01;
-    key[3] = button.size();
+    key[2] = button.size() + 2 + 2;
+    key[3] = 0x01;
+    key[4] = button.size();
     for (int i = 0; i < ba.size(); ++i)
     {
-        key[4+i] =( unsigned char)ba.at(i);
+        key[5+i] =( unsigned char)ba.at(i);
     }
-    uint16_t crc= crc_16(&key[2],button.size() + 2);
+    uint16_t crc= crc_16(&key[3],button.size() + 2);
     memcpy(&key[4+button.size()],&crc,sizeof(uint16_t));
-    key[4+button.size() + 2] = 0x5B;
-    key[4+button.size() + 3] = 0x81;
+    key[5+button.size() + 2] = 0x5B;
+    key[5+button.size() + 3] = 0x81;
 
     // QByteArray data;
     // data.append(0x66);
@@ -131,7 +139,7 @@ void MouseKeyboardManager::clickButton(const QString &button)
     // data.append(0x5B);
     // data.append(0x81);
     qDebug()<<"write";
-    serial.write((const char *)key,4+button.size() + 4);
+    serial.write((const char *)key,5+button.size() + 4);
 }
 
 void MouseKeyboardManager::clickButton(int button)
@@ -140,15 +148,16 @@ void MouseKeyboardManager::clickButton(int button)
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
-    key[2] = 0x01;
-    key[3] = 1;
-    key[4] = button;
-    uint16_t crc= crc_16(&key[2],3);
-    memcpy(&key[5],&crc,sizeof(uint16_t));
-    key[7] = 0x5B;
-    key[8] = 0x81;
+    key[2] = 0x05;
+    key[3] = 0x01;
+    key[4] = 1;
+    key[5] = button;
+    uint16_t crc= crc_16(&key[3],3);
+    memcpy(&key[6],&crc,sizeof(uint16_t));
+    key[8] = 0x5B;
+    key[9] = 0x81;
     qDebug()<<"write";
-    serial.write((const char *)key,4+1 + 4);
+    serial.write((const char *)key,10);
 }
 
 void MouseKeyboardManager::humanMouseMove(int endX, int endY)
@@ -196,27 +205,50 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
-    key[2] = 0x02;
-    key[3] = 1;
-    memcpy(&key[4],&x,sizeof(int));
-    memcpy(&key[8],&y,sizeof(int));
-    uint16_t crc= crc_16(&key[2],2+8);
-    memcpy(&key[12],&crc,sizeof(uint16_t));
-    key[14] = 0x5B;
-    key[15] = 0x81;
+    key[2] = 2 + 8 + 2;
+    key[3] = 0x02;
+    key[4] = 1;
+    memcpy(&key[5],&x,sizeof(int));
+    memcpy(&key[9],&y,sizeof(int));
+    uint16_t crc= crc_16(&key[3],2+8);
+    memcpy(&key[13],&crc,sizeof(uint16_t));
+    key[15] = 0x5B;
+    key[16] = 0x81;
     qDebug()<<"write";
-    serial.write((const char *)key,4+10 +4);
+
+
+    unsigned char tmp[100] = {0} ;
+    char data[100] = {0};
+    data[0] =  0x02;
+    data[1] =  1;
+    memcpy(&data[2],&x,sizeof(int));
+    memcpy(&data[6],&y,sizeof(int));
+    createPacket((char*)tmp,data,10);
+
+    serial.write((const char *)tmp,10 + 3 + 4);
     serial.flush();
     serial.waitForBytesWritten();
+}
+
+void MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
+{
+    (*dist) = 0x66;
+    *(dist + 1) = 0x68;
+    *(dist + 2) = datasize;
+    memcpy(dist + 3,data,datasize);
+    uint16_t crc= crc_16((uint8_t *)dist + 3,datasize);
+    memcpy(dist + 3 + datasize,&crc,sizeof(uint16_t));
+    *(dist + 3+ datasize +2) = 0x5B;
+    *(dist + 3+ datasize +3) = 0x81;
 }
 
 
 void MouseKeyboardManager::mouseClick()
 {
-    QThread::sleep(5);
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
+    key[2] = 0x02;
     key[2] = 0x02;
     key[3] = 2;
     uint16_t crc= crc_16(&key[2],2);
@@ -229,7 +261,6 @@ void MouseKeyboardManager::mouseClick()
 
 void MouseKeyboardManager::mouseDoubleClick()
 {
-    QThread::sleep(5);
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
@@ -245,7 +276,6 @@ void MouseKeyboardManager::mouseDoubleClick()
 
 void MouseKeyboardManager::mouseRightClick()
 {
-    QThread::sleep(5);
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;

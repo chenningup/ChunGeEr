@@ -18,8 +18,11 @@ protected:
     void leaveEvent(QEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
-public:
+    void mouseReleaseEvent(QMouseEvent *event) override;
+public slots:
     void keyPressEventSlot(int vkCode);
+    void keyReleaseEventSlot(int vkCode);
+
 signals:
 };
 

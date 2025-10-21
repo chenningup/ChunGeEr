@@ -143,40 +143,60 @@ void MainWindow::clientRecMegSlot(const json &msg)
             SetCursorPos(x, y);
             return;
         }
-        if(cmd == "MouseClickSync")
+        if(cmd == "MousePressSync")
         {
             int x = msg["data"]["x"].get<int>();
             int y = msg["data"]["y"].get<int>();
             SetCursorPos(x, y);
 
             std::string type = msg["data"]["type"].get<std::string>();
+            DWORD dwtype;
             if(type == "left")
             {
-                INPUT inputs[2] = {0};
-                // 按下事件
-                inputs[0].type = INPUT_MOUSE;
-                inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-                // 释放事件
-                inputs[1].type = INPUT_MOUSE;
-                inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-                // 发送输入事件
-                SendInput(2, inputs, sizeof(INPUT));
+                dwtype = MOUSEEVENTF_LEFTDOWN;
             }
             else
             {
-                INPUT inputs[2] = {0};
-                // 按下事件
-                inputs[0].type = INPUT_MOUSE;
-                inputs[0].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
-                // 释放事件
-                inputs[1].type = INPUT_MOUSE;
-                inputs[1].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
-                // 发送输入事件
-                SendInput(2, inputs, sizeof(INPUT));
+                dwtype = MOUSEEVENTF_RIGHTDOWN;
             }
+            INPUT inputs[1] = {0};
+            // 按下事件
+            inputs[0].type = INPUT_MOUSE;
+            inputs[0].mi.dwFlags = dwtype;
+            // 释放事件
+//            inputs[1].type = INPUT_MOUSE;
+//            inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+            // 发送输入事件
+            SendInput(1, inputs, sizeof(INPUT));
             return;
         }
-        if( cmd == "KeybordSync" )
+        if(cmd == "MouseReleaseSync")
+        {
+            int x = msg["data"]["x"].get<int>();
+            int y = msg["data"]["y"].get<int>();
+            SetCursorPos(x, y);
+            std::string type = msg["data"]["type"].get<std::string>();
+            DWORD dwtype;
+            if(type == "left")
+            {
+                dwtype = MOUSEEVENTF_LEFTUP;
+            }
+            else
+            {
+                dwtype = MOUSEEVENTF_RIGHTUP;
+            }
+            INPUT inputs[1] = {0};
+            // 释放事件
+            inputs[0].type = INPUT_MOUSE;
+            inputs[0].mi.dwFlags = dwtype;
+            // 释放事件
+            //            inputs[1].type = INPUT_MOUSE;
+            //            inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+            // 发送输入事件
+            SendInput(1, inputs, sizeof(INPUT));
+            return;
+        }
+        if( cmd == "KeybordPressSync" )
         {
             int key  = msg["data"]["Key"].get<int>();
             INPUT ip;
@@ -188,6 +208,19 @@ void MainWindow::clientRecMegSlot(const json &msg)
             // 设置键盘释放事件
             ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
             SendInput(1, &ip, sizeof(INPUT));
+             return;
+        }
+        if( cmd == "KeybordReleaseSync" )
+        {
+             int key  = msg["data"]["Key"].get<int>();
+             INPUT ip;
+             ip.type = INPUT_KEYBOARD;
+             ip.ki.wVk = key; // 'A' 的虚拟键码
+
+             // 设置键盘释放事件
+             ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
+             SendInput(1, &ip, sizeof(INPUT));
+             return;
         }
     }
 }

@@ -18,6 +18,7 @@ public:
     void stopListen();
 signals:
     void keyPressEvent(int vkCode);
+    void keyReleaseEvent(int vkCode);
 private:
     bool isListen;
 };

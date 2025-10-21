@@ -8,6 +8,7 @@ MouseLabel::MouseLabel(QWidget *parent)
 {
     this->setMouseTracking(true);
     connect(&Keyboardlistener::Instance(),&Keyboardlistener::keyPressEvent,this,&MouseLabel::keyPressEventSlot,Qt::QueuedConnection);
+    connect(&Keyboardlistener::Instance(),&Keyboardlistener::keyReleaseEvent,this,&MouseLabel::keyReleaseEventSlot,Qt::QueuedConnection);
 }
 
 void MouseLabel::wheelEvent(QWheelEvent *event)
@@ -96,7 +97,7 @@ void MouseLabel::mousePressEvent(QMouseEvent *event)
     if(isMaster && ScreenShare::Instance().isRunning())
     {
         json cmd ;
-        cmd["cmd"] = "MouseClickSync";
+        cmd["cmd"] = "MousePressSync";
         json data;
         data["x"] = x;
         data["y"] = y;
@@ -107,12 +108,55 @@ void MouseLabel::mousePressEvent(QMouseEvent *event)
     QLabel::mousePressEvent(event);
 }
 
+void MouseLabel::mouseReleaseEvent(QMouseEvent *event)
+{
+    QPoint pos = event->pos();
+    int x = pos.x();
+    int y = pos.y();
+
+    // 判断按下的鼠标按键
+    QString buttonText;
+    if (event->button() == Qt::LeftButton) {
+        buttonText = "left";
+    } else if (event->button() == Qt::RightButton) {
+        buttonText = "right";
+    } else {
+        buttonText = "other";
+    }
+    qDebug() << buttonText;
+    if(isMaster && ScreenShare::Instance().isRunning())
+    {
+        json cmd ;
+        cmd["cmd"] = "MouseReleaseSync";
+        json data;
+        data["x"] = x;
+        data["y"] = y;
+        data["type"] = buttonText.toStdString();
+        cmd["data"] = data;
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+    QLabel::mouseReleaseEvent(event);
+}
+
 void MouseLabel::keyPressEventSlot(int vkCode)
 {
     if(isMaster  && ScreenShare::Instance().isRunning())
     {
         json cmd ;
-        cmd["cmd"] = "KeybordSync";
+        cmd["cmd"] = "KeybordPressSync";
+        json data;
+        data["Key"] = vkCode;
+        cmd["data"] = data;
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+}
+
+void MouseLabel::keyReleaseEventSlot(int vkCode)
+{
+    if(isMaster  && ScreenShare::Instance().isRunning())
+    {
+        json cmd ;
+        cmd["cmd"] = "KeybordReleaseSync";
         json data;
         data["Key"] = vkCode;
         cmd["data"] = data;

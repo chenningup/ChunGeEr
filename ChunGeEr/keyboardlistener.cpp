@@ -17,6 +17,12 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             // 示例：拦截A键
             emit Keyboardlistener::Instance().keyPressEvent(pKeyStruct->vkCode);
         }
+        if(wParam == WM_KEYUP)
+        {
+            qDebug()<<"Key Release: VK_Code = " << pKeyStruct->vkCode;
+            // 示例：拦截A键
+            emit Keyboardlistener::Instance().keyReleaseEvent(pKeyStruct->vkCode);
+        }
     }
 
     // 将消息传递给下一个钩子或目标窗口

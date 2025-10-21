@@ -74,7 +74,6 @@ void MouseLabel::mouseMoveEvent(QMouseEvent *event)
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
-    qDebug() << pos;
 }
 
 void MouseLabel::mousePressEvent(QMouseEvent *event)

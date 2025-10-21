@@ -38,6 +38,7 @@ QString OcrMnager::identify(cv::Mat &pic)
     }
     Mat binary;
     threshold(gray, binary, 105, 255, THRESH_BINARY);
+    cv::imwrite("binary.png", binary);
     PIX* image = nullptr;
     if (binary.channels() == 1)
     {  // 灰度图

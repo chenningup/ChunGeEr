@@ -7,6 +7,7 @@
 #include "wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
 #include "service/CatchMonsters/catchmonstersservice.h"
+#include "keyboardlistener.h"
 #include "encodingmanager.h"
 #include "StorageVidoeManager.h"
 #include "screenshare.h"
@@ -201,6 +202,7 @@ void MainWindow::on_screenShareButton_clicked()
     {
         clickedButton->setText("结束");
         ScreenShare::Instance().startShare();
+        Keyboardlistener::Instance().startListen();
         json cmd ;
         cmd["cmd"] = "ShareScreen";
         json data;

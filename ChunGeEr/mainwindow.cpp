@@ -15,6 +15,7 @@
 #include <QSettings>
 #include <QDebug>
 #include <windows.h>
+#include "Ocr/ocrmnager.h"
 bool isMaster;
 QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
@@ -35,7 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
     StorageVidoeManager::Instance().init();
     ScreenShare::Instance().init();
     DetectorManager::Instance().init("best.onnx","data.yaml");
-
+    OcrMnager::Instance().init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::clientConnectToServer,this,&MainWindow::clientConnectToServer,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::clientDisConnectToServer,this,&MainWindow::clientDisConnectToServer,Qt::QueuedConnection);

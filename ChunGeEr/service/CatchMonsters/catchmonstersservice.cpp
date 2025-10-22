@@ -76,14 +76,14 @@ void CatchMonstersService::run()
             if(res.size() != 0)
             {
                 // 25  160 27
-                cv::Rect ocr_rect(310, 62, 80, 23); // 从 (100,50) 开始，截取 200x150 的区域
+                cv::Rect ocr_rect(310, 60, 83, 20); // 从 (100,50) 开始，截取 200x150 的区域
                 // 截取 ROI
                 cv::Mat cormat = img1(ocr_rect).clone();
 
                 QString res = OcrMnager::Instance().identify(cormat);
                 cv::imshow("identify", cormat);
                 cv::waitKey(1);
-                qDebug()<<res;
+                qDebug()<<"res" << res;
             }
             cv::imshow("Live", img);
             cv::waitKey(1);

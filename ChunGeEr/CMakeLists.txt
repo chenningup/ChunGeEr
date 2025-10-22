@@ -146,6 +146,29 @@ target_link_libraries(ChunGeEr PRIVATE Qt6::Core)
 else()
     # Release 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)
+    target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::SerialPort
+        tesseract55
+        org.sw.demo.danbloomberg.leptonica-1.85.0
+        ScreenCapture
+        opencv_core490
+        opencv_calib3d490
+        opencv_imgcodecs490
+        opencv_imgproc490
+        opencv_highgui490
+        hv
+        windowsapp
+        avcodec
+        avdevice
+        avfilter
+        avutil
+        swresample
+        swscale
+        avformat
+        onnxruntime
+        YoloOnnx
+        opencv_dnn490)
 endif()
 
 

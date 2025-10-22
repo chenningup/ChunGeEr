@@ -344,14 +344,14 @@ int main(int argc, char *argv[])
 
 
     tesseract::TessBaseAPI tess;
-    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "chi_sim_custom") != 0) {
+    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "chi_sim_custom+chi_sim") != 0) {
         return 0;
     }
     QDir dir(QApplication::applicationDirPath());
 
     // 设置名称过滤器，只查找.bmp文件
     QStringList filters;
-    filters << "*.bmp";
+    filters << "*.png";
 
     // 获取所有匹配的文件
     QStringList bmpFiles = dir.entryList(filters, QDir::Files | QDir::NoDotAndDotDot);
@@ -362,6 +362,7 @@ int main(int argc, char *argv[])
         Mat imageMat = imread(file.toStdString()); // 请替换为你的图片路径
         cv::imshow("imageMat", imageMat);
                cv::waitKey(0);
+        qDebug()<<file << imageMat.channels();
         Mat gray;
         if (imageMat.empty())
         {
@@ -377,14 +378,14 @@ int main(int argc, char *argv[])
         //        cv::waitKey(0);
         // Otsu 自动阈值二值化
         Mat binary;
-        threshold(gray, binary, 105, 255, THRESH_BINARY);
+        cv::threshold(gray, binary, 105, 255, THRESH_BINARY);
 
-        // 保存结果
+        // // 保存结果
         QString output = QString("output_%1.png").arg(file);
         //        cv::imshow("binary", binary);
         //        cv::waitKey(0);
         cv::imwrite(output.toStdString(), binary);
-
+        qDebug()<<binary.channels();
         PIX* image = nullptr;
         if (binary.channels() == 1) {  // 灰度图
             image = pixCreate(binary.cols, binary.rows, 8); // 8位深度
@@ -405,7 +406,7 @@ int main(int argc, char *argv[])
     //QString path ="D:\\123.bmp";
     //   QString path ="test.png";
     //   Pix *image = pixRead(path.toLocal8Bit().data());
-    tess.End();
+    //tess.End();
     MainWindow w;
     w.show();
     return a.exec();

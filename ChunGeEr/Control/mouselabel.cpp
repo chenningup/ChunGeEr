@@ -64,14 +64,14 @@ void MouseLabel::mouseMoveEvent(QMouseEvent *event)
     QPoint pos = event->pos();
     int x = pos.x();
     int y = pos.y();
-
+    //qDebug()<<"mouseMove" <<x <<y;
     if(isMaster && ScreenShare::Instance().isRunning())
     {
         json cmd ;
         cmd["cmd"] = "MouseMoveSync";
         json data;
         data["x"] = x;
-        data["y"] = x;
+        data["y"] = y;
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }

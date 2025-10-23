@@ -54,7 +54,6 @@ MainWindow::MainWindow(QWidget *parent)
     {
         QString url = "ws://"+serverIp+":7777";
         WsManager::Instance().startClient(url);
-        ScreenCaptureManager::Instance().startCapture();
         ui->screenShareButton->hide();
     }
     // 3. 打印读取的值
@@ -128,11 +127,13 @@ void MainWindow::clientRecMegSlot(const json &msg)
             if(serviceName == "Start")
             {
                 EncodingManager::Instance().startEncodeing();
+                ScreenCaptureManager::Instance().startCapture();
                 ScreenShare::Instance().startShare();
             }
             else
             {
                 EncodingManager::Instance().stopEncodeing();
+                ScreenCaptureManager::Instance().stopCapture();
                 ScreenShare::Instance().stopShare();
             }
             return;

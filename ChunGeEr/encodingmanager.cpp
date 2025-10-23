@@ -48,6 +48,10 @@ void EncodingManager::init()
     m_codecContext->gop_size = 30;             // GOP长度
     m_codecContext->flags |= AV_CODEC_FLAG_LOW_DELAY; // 低延迟
 
+    av_opt_set(m_codecContext->priv_data, "preset", "ultrafast", 0);
+    av_opt_set(m_codecContext->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(m_codecContext->priv_data, "profile", "baseline", 0);
+    //m_codecContext->thread_count = 1;
 //    av_opt_set(m_codecContext->priv_data, "preset", "fast", 0);      // 编码速度/质量权衡
 //    av_opt_set(m_codecContext->priv_data, "tune", "zerolatency", 0);// 低延迟优化
 //    av_opt_set(m_codecContext->priv_data, "x265-params", "crf=23:ref=3", 0);

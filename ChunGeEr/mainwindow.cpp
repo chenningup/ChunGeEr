@@ -232,7 +232,7 @@ void MainWindow::clientRecMegSlot(const json &msg)
             int key  = msg["data"]["Key"].get<int>();
             if(MouseKeyboardManager::Instance().isOpen())
             {
-
+                MouseKeyboardManager::Instance().keyPress(key);
             }
             else
             {
@@ -250,13 +250,14 @@ void MainWindow::clientRecMegSlot(const json &msg)
         }
         if( cmd == "KeybordReleaseSync" )
         {
+            int key  = msg["data"]["Key"].get<int>();
             if(MouseKeyboardManager::Instance().isOpen())
             {
-
+                MouseKeyboardManager::Instance().keyRelease(key);
             }
             else
             {
-                int key  = msg["data"]["Key"].get<int>();
+
                 INPUT ip;
                 ip.type = INPUT_KEYBOARD;
                 ip.ki.wVk = key; // 'A' 的虚拟键码

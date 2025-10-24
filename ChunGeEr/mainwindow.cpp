@@ -224,6 +224,17 @@ void MainWindow::clientRecMegSlot(const json &msg)
              SendInput(1, &ip, sizeof(INPUT));
              return;
         }
+        if( cmd == "MousewheelSync" )
+        {
+             int dis  = msg["data"]["dis"].get<int>();
+             INPUT input;
+             input.type = INPUT_MOUSE;
+             input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+             input.mi.mouseData = dis;  // 正数向上滚动，负数向下滚动
+
+             SendInput(1, &input, sizeof(INPUT));
+             return;
+        }
     }
 }
 

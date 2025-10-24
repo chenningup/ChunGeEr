@@ -15,29 +15,34 @@ void MouseLabel::wheelEvent(QWheelEvent *event)
 {
     // 优先检查像素增量（适用于高精度触摸板）
     QPoint pixelDelta = event->pixelDelta();
-    if (!pixelDelta.isNull()) {
+    if (!pixelDelta.isNull())
+    {
         // 使用像素增量
         int scrollPixels = pixelDelta.y();
-        if (scrollPixels > 0) {
-            qDebug() << "向上滑动了（像素）:" << scrollPixels << "像素";
-        } else if (scrollPixels < 0) {
-            qDebug() << "向下滑动了（像素）:" << -scrollPixels << "像素";
+        if(isMaster && ScreenShare::Instance().isRunning())
+        {
+            json cmd ;
+            cmd["cmd"] = "MousewheelSync";
+            json data;
+            data["dis"] = scrollPixels;
+            cmd["data"] = data;
+            WsManager::Instance().sendMsgToClient(cmd.dump());
         }
     }
     // 如果没有像素增量（如使用普通鼠标），则检查角度增量
     else {
         QPoint angleDelta = event->angleDelta();
-        if (!angleDelta.isNull()) {
+        if (!angleDelta.isNull())
+        {
             int scrollDegrees = angleDelta.y();
-            if (scrollDegrees > 0) {
-                qDebug() << "向上滑动了（角度）:" << scrollDegrees << "度";
-                // 对于常见的鼠标，可以将其转换为“格数”
-                int numSteps = scrollDegrees / 120; // 每格通常为120度
-                qDebug() << "相当于向上滑动了" << numSteps << "格";
-            } else if (scrollDegrees < 0) {
-                qDebug() << "向下滑动了（角度）:" << -scrollDegrees << "度";
-                int numSteps = -scrollDegrees / 120;
-                qDebug() << "相当于向下滑动了" << numSteps << "格";
+            if(isMaster && ScreenShare::Instance().isRunning())
+            {
+                json cmd ;
+                cmd["cmd"] = "MousewheelSync";
+                json data;
+                data["dis"] = scrollDegrees;
+                cmd["data"] = data;
+                WsManager::Instance().sendMsgToClient(cmd.dump());
             }
         }
     }

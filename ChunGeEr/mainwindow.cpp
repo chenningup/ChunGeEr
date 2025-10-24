@@ -16,6 +16,7 @@
 #include <QDebug>
 #include <windows.h>
 #include "Ocr/ocrmnager.h"
+#include "mousekeyboardmanager.h"
 bool isMaster;
 QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
@@ -63,17 +64,17 @@ MainWindow::MainWindow(QWidget *parent)
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
     //MouseKeyboardManager::Instance().humanMouseMove(10,10);
-        QPoint current = QCursor::pos();
-        qDebug()<<"steps"<<current;
+    QPoint current = QCursor::pos();
+    qDebug()<<"steps"<<current;
     MouseKeyboardManager::Instance().moveMouse(-30,-30);
     // while(true)
     // {
     //     QPoint current = QCursor::pos();
     //     qDebug()<<"steps"<<current;
-         QThread::sleep(1);
+    QThread::sleep(1);
     // }
-        current = QCursor::pos();
-        qDebug()<<"steps"<<current;
+    current = QCursor::pos();
+    qDebug()<<"steps"<<current;
     //MouseKeyboardManager::Instance().mouseDoubleClick();
     //MouseKeyboardManager::Instance().mouseRightClick();
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);
@@ -91,12 +92,12 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_testButton_clicked()
 {
-//    ServerDungeonService *serivce = new ServerDungeonService();
-//    serivce->startService();
+    //    ServerDungeonService *serivce = new ServerDungeonService();
+    //    serivce->startService();
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
-   CatchMonstersService *service = new CatchMonstersService();
-   service->startService();
+    CatchMonstersService *service = new CatchMonstersService();
+    service->startService();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)
@@ -142,98 +143,141 @@ void MainWindow::clientRecMegSlot(const json &msg)
         {
             int x = msg["data"]["x"].get<int>();
             int y = msg["data"]["y"].get<int>();
-            SetCursorPos(x, y);
+            if(MouseKeyboardManager::Instance().isOpen())
+            {
+                MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+            }
+            else
+            {
+                SetCursorPos(x, y);
+            }
             return;
         }
         if(cmd == "MousePressSync")
         {
             int x = msg["data"]["x"].get<int>();
             int y = msg["data"]["y"].get<int>();
-            SetCursorPos(x, y);
-
-            std::string type = msg["data"]["type"].get<std::string>();
-            DWORD dwtype;
-            if(type == "left")
+            if(MouseKeyboardManager::Instance().isOpen())
             {
-                dwtype = MOUSEEVENTF_LEFTDOWN;
+                MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+                std::string type = msg["data"]["type"].get<std::string>();
+                if(type == "left")
+                {
+                    MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+                }
+                else
+                {
+                    MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
+                }
             }
             else
             {
-                dwtype = MOUSEEVENTF_RIGHTDOWN;
+                SetCursorPos(x, y);
+                std::string type = msg["data"]["type"].get<std::string>();
+                DWORD dwtype;
+                if(type == "left")
+                {
+                    dwtype = MOUSEEVENTF_LEFTDOWN;
+                }
+                else
+                {
+                    dwtype = MOUSEEVENTF_RIGHTDOWN;
+                }
+                INPUT inputs[1] = {0};
+                inputs[0].type = INPUT_MOUSE;
+                inputs[0].mi.dwFlags = dwtype;
+                SendInput(1, inputs, sizeof(INPUT));
             }
-            INPUT inputs[1] = {0};
-            // 按下事件
-            inputs[0].type = INPUT_MOUSE;
-            inputs[0].mi.dwFlags = dwtype;
-            // 释放事件
-//            inputs[1].type = INPUT_MOUSE;
-//            inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-            // 发送输入事件
-            SendInput(1, inputs, sizeof(INPUT));
             return;
         }
         if(cmd == "MouseReleaseSync")
         {
             int x = msg["data"]["x"].get<int>();
             int y = msg["data"]["y"].get<int>();
-            SetCursorPos(x, y);
-            std::string type = msg["data"]["type"].get<std::string>();
-            DWORD dwtype;
-            if(type == "left")
+            if(MouseKeyboardManager::Instance().isOpen())
             {
-                dwtype = MOUSEEVENTF_LEFTUP;
+                MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+                std::string type = msg["data"]["type"].get<std::string>();
+                if(type == "left")
+                {
+                    MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+                }
+                else
+                {
+                    MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
+                }
             }
             else
             {
-                dwtype = MOUSEEVENTF_RIGHTUP;
+                SetCursorPos(x, y);
+                std::string type = msg["data"]["type"].get<std::string>();
+                DWORD dwtype;
+                if(type == "left")
+                {
+                    dwtype = MOUSEEVENTF_LEFTUP;
+                }
+                else
+                {
+                    dwtype = MOUSEEVENTF_RIGHTUP;
+                }
+                INPUT inputs[1] = {0};
+                inputs[0].type = INPUT_MOUSE;
+                inputs[0].mi.dwFlags = dwtype;
+                SendInput(1, inputs, sizeof(INPUT));
             }
-            INPUT inputs[1] = {0};
-            // 释放事件
-            inputs[0].type = INPUT_MOUSE;
-            inputs[0].mi.dwFlags = dwtype;
-            // 释放事件
-            //            inputs[1].type = INPUT_MOUSE;
-            //            inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-            // 发送输入事件
-            SendInput(1, inputs, sizeof(INPUT));
             return;
         }
         if( cmd == "KeybordPressSync" )
         {
             int key  = msg["data"]["Key"].get<int>();
-            INPUT ip;
-            ip.type = INPUT_KEYBOARD;
-            ip.ki.wVk = key; // 'A' 的虚拟键码
-            ip.ki.dwFlags = 0; // 0 表示按下
-            SendInput(1, &ip, sizeof(INPUT));
+            if(MouseKeyboardManager::Instance().isOpen())
+            {
 
-            // 设置键盘释放事件
-            ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
-            SendInput(1, &ip, sizeof(INPUT));
-             return;
+            }
+            else
+            {
+                INPUT ip;
+                ip.type = INPUT_KEYBOARD;
+                ip.ki.wVk = key; // 'A' 的虚拟键码
+                ip.ki.dwFlags = 0; // 0 表示按下
+                SendInput(1, &ip, sizeof(INPUT));
+
+                // 设置键盘释放事件
+                ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
+                SendInput(1, &ip, sizeof(INPUT));
+            }
+            return;
         }
         if( cmd == "KeybordReleaseSync" )
         {
-             int key  = msg["data"]["Key"].get<int>();
-             INPUT ip;
-             ip.type = INPUT_KEYBOARD;
-             ip.ki.wVk = key; // 'A' 的虚拟键码
+            if(MouseKeyboardManager::Instance().isOpen())
+            {
 
-             // 设置键盘释放事件
-             ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
-             SendInput(1, &ip, sizeof(INPUT));
-             return;
+            }
+            else
+            {
+                int key  = msg["data"]["Key"].get<int>();
+                INPUT ip;
+                ip.type = INPUT_KEYBOARD;
+                ip.ki.wVk = key; // 'A' 的虚拟键码
+
+                // 设置键盘释放事件
+                ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
+                SendInput(1, &ip, sizeof(INPUT));
+            }
+
+            return;
         }
         if( cmd == "MousewheelSync" )
         {
-             int dis  = msg["data"]["dis"].get<int>();
-             INPUT input;
-             input.type = INPUT_MOUSE;
-             input.mi.dwFlags = MOUSEEVENTF_WHEEL;
-             input.mi.mouseData = dis;  // 正数向上滚动，负数向下滚动
+            int dis  = msg["data"]["dis"].get<int>();
+            INPUT input;
+            input.type = INPUT_MOUSE;
+            input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+            input.mi.mouseData = dis;  // 正数向上滚动，负数向下滚动
 
-             SendInput(1, &input, sizeof(INPUT));
-             return;
+            SendInput(1, &input, sizeof(INPUT));
+            return;
         }
     }
 }

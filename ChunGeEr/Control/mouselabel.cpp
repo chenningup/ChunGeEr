@@ -2,6 +2,7 @@
 #include "../wsmanager.h"
 #include "../screenshare.h"
 #include"../keyboardlistener.h"
+#include <QGuiApplication>
 extern bool isMaster;
 MouseLabel::MouseLabel(QWidget *parent)
     : QLabel(parent)
@@ -145,7 +146,7 @@ void MouseLabel::mouseReleaseEvent(QMouseEvent *event)
 
 void MouseLabel::keyPressEventSlot(int vkCode)
 {
-    if(isMaster  && ScreenShare::Instance().isRunning())
+    if(isMaster  && ScreenShare::Instance().isRunning() && QGuiApplication::applicationState() == Qt::ApplicationActive)
     {
         json cmd ;
         cmd["cmd"] = "KeybordPressSync";
@@ -158,7 +159,7 @@ void MouseLabel::keyPressEventSlot(int vkCode)
 
 void MouseLabel::keyReleaseEventSlot(int vkCode)
 {
-    if(isMaster  && ScreenShare::Instance().isRunning())
+    if(isMaster  && ScreenShare::Instance().isRunning() && QGuiApplication::applicationState() == Qt::ApplicationActive)
     {
         json cmd ;
         cmd["cmd"] = "KeybordReleaseSync";

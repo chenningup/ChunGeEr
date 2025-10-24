@@ -160,11 +160,23 @@ void loop() {
                     int cmd =  buffer[3];
                     if(cmd == 1)//键盘
                     {
-                        int size = buffer[4];
-                        for(int i = 0;i<size;i++)
-                        {
-                            Keyboard.write(buffer[5+i]);
-                        }
+                        int type = buffer[4];
+						if(type == 1)
+						{
+							Keyboard.press(buffer[5]);
+						}
+						else if(type == 2)
+						{
+							Keyboard.release(buffer[5]);
+						}
+						else if(type == 3)
+						{
+							int size = buffer[5];
+							for(int i = 0;i<size;i++)
+							{
+								Keyboard.write(buffer[6+i]);
+							}
+						}
                     }
                     if(cmd == 2)
                     {
@@ -180,7 +192,7 @@ void loop() {
                              Mouse.move((int8_t)x, (int8_t)y, 0); // 修正关键点
                              Serial.println("X raw="); Serial.println(x);
                              Serial.println("Y raw="); Serial.println(y);
-                             delay(50);
+                             delay(2);
                         }
                         else if(type == 2)
                         {
@@ -196,6 +208,22 @@ void loop() {
                         else if(type == 4)
                         {
                             Mouse.click(MOUSE_RIGHT);
+                        }
+						else if(type == 5)
+                        {
+                            Mouse.press(MOUSE_LEFT);
+                        }
+						else if(type == 6)
+                        {
+                            Mouse.press(MOUSE_RIGHT);
+                        }
+						else if(type == 7)
+                        {
+                            Mouse.release(MOUSE_LEFT);
+                        }
+						else if(type == 8)
+                        {
+                            Mouse.release(MOUSE_RIGHT);
                         }
                     }
                     pr=0;

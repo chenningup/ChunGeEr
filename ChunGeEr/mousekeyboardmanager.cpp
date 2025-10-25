@@ -193,7 +193,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     {
         return ;
     }
-    //qDebug() <<"move x:"<<x<<",move y:"<<y;
+
     unsigned char tmp[100] = {0} ;
     char data[100] = {0};
     data[0] =  0x02;
@@ -204,12 +204,13 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     serial.write((const char *)tmp,10 + 3 + 4);
     serial.flush();
     serial.waitForBytesWritten();
+    qDebug() <<"moveMouse leave";
 }
 
 void MouseKeyboardManager::mouseMoveDirect(int x, int y)
 {
-    qDebug()<<"mouseMoveDirect enter:" << x << y;
     QPoint current = QCursor::pos();
+    //qDebug()<<"mouseMoveDirect enter: move to:" << x << y<<"cur pos:"<<current.x()<<current.y();
     int moveXpiece = x - current.x() > 0 ? 100 : -100;
     int moveYpiece = y - current.y() > 0 ? 100 : -100;
     int tmpx = current.x();
@@ -234,12 +235,26 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
         {
             movey = y - tmpy;
         }
-        qDebug()<<"tmp mouseMoveDirect :" << movex << movey;
-        moveMouse(movex,movey);
+
         tmpx+=movex;
         tmpy+=movey;
+        moveMouse(movex,movey);
+        int index = 0;
+        while (QCursor::pos().x() != tmpx || QCursor::pos().y() != tmpy)
+        {
+            QThread::msleep(1);
+            index++;
+            if(index >=1000)
+            {
+                break;
+            }
+        }
+        current = QCursor::pos();
+       // qDebug()<<"tmp mouseMoveDirect :" << movex << movey <<"cur x,y:"<<current.x() << current.y();
+
     }
-    qDebug()<<"mouseMoveDirect leave";
+    current = QCursor::pos();
+    //qDebug()<<"mouseMoveDirect leave" <<"cur x,y:"<<current.x() << current.y();
 
 }
 

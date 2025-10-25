@@ -102,7 +102,7 @@ void MouseKeyboardManager::init()
             qDebug() << "接收到数据:" << data;
         }
     });
-    timer.start();
+    timer.start(1);
 }
 
 bool MouseKeyboardManager::isOpen()
@@ -279,7 +279,7 @@ int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
 {
     (*dist) = 0x66;
     *(dist + 1) = 0x68;
-    *(dist + 2) = datasize;
+    *(dist + 2) = datasize+2;
     memcpy(dist + 3,data,datasize);
     uint16_t crc= crc_16((uint8_t *)dist + 3,datasize);
     memcpy(dist + 3 + datasize,&crc,sizeof(uint16_t));

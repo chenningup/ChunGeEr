@@ -22,120 +22,148 @@ ScreenCaptureManager &ScreenCaptureManager::Instance()
 static QDateTime lastTime;
 void ScreenCaptureManager::run()
 {
+    using namespace std::chrono;
+
     // 1. Create D3D11 Device
-    QDateTime time = QDateTime::currentDateTime();
-    //qDebug() << "1" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
     com_ptr<ID3D11Device> d3d11Device = ScreenCaptureCore::ScreenCapture::CreateD3DDevice();
     IDirect3DDevice direct3DDevice = ScreenCaptureCore::ScreenCapture::CreateDirect3DDeviceFromD3D11Device(d3d11Device);
 
     // 2. Create capture item for primary monitor
     GraphicsCaptureItem captureItem = ScreenCaptureCore::ScreenCapture::CreateCaptureItemForMonitor();
-    time = QDateTime::currentDateTime();
-    //qDebug() << "2" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-    // 3. Create Direct3D11CaptureFramePool
-    auto framePool = Direct3D11CaptureFramePool::Create(direct3DDevice,
-                                                        DirectXPixelFormat::B8G8R8A8UIntNormalized,
-                                                        1,
-                                                        captureItem.Size());
-    time = QDateTime::currentDateTime();
-    //qDebug() << "3" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-    // 4. Create capture session
+
+    // 3. Create frame pool
+    auto framePool = Direct3D11CaptureFramePool::Create(
+        direct3DDevice,
+        DirectXPixelFormat::B8G8R8A8UIntNormalized,
+        1,
+        captureItem.Size());
+
+    // 4. Create session
     auto session = framePool.CreateCaptureSession(captureItem);
-    time = QDateTime::currentDateTime();
-    //qDebug() << "4" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-    // 5. Configure capture session options
-    //session.IsCursorCaptureEnabled(false);
-    //session.IsBorderRequired(false);
+
+    // 5. Create immediate context
+    com_ptr<ID3D11DeviceContext> context;
+    d3d11Device->GetImmediateContext(context.put());
+
+    // 6. Prepare triple staging textures + queries
+    struct StagingSlot {
+        com_ptr<ID3D11Texture2D> tex;
+        com_ptr<ID3D11Query> query;
+        bool pending = false;
+    };
+    std::vector<StagingSlot> StagingSlots(3);
+    int current = 0;
+
+    D3D11_TEXTURE2D_DESC sharedDesc{};
+    bool initialized = false;
+
     std::condition_variable frameCondition;
-    time = QDateTime::currentDateTime();
-    //qDebug() << "4" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+    static QDateTime lastTime;
 
-    framePool.FrameArrived([&](auto const &sender, auto const &args) {
-        if(!lastTime.isValid())
-        {
-            lastTime = QDateTime::currentDateTime();
+    framePool.FrameArrived([&](auto const& sender, auto const&) {
+        if(!lastTime.isValid()) lastTime = QDateTime::currentDateTime();
+        else {
+            QDateTime cur = QDateTime::currentDateTime();
+            if(lastTime.msecsTo(cur) < 30) return;
+            lastTime = cur;
         }
-        else
-        {
-            QDateTime curTime = QDateTime::currentDateTime();
-            if(lastTime.msecsTo(curTime) < 30)
-            {
-                return;
-            }
-            lastTime = curTime;
-        }
-        //qDebug() << "5" << time.currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")<<num;
-        //num++;
+
         auto frame = sender.TryGetNextFrame();
-        if (frame) {
-            try {
-                // Get the Direct3D11 surface
-                auto surface = frame.Surface();
+        if (!frame) return;
 
-                // Get the underlying D3D11 texture using interop
-                com_ptr<ID3D11Texture2D> texture;
-                auto dxgiInterfaceAccess = surface.as<
-                    ::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
-                winrt::check_hresult(dxgiInterfaceAccess->GetInterface(IID_PPV_ARGS(&texture)));
+        try {
+            auto surface = frame.Surface();
+            // Get the underlying D3D11 texture using interop
+            // Get the underlying D3D11 texture using interop
+            com_ptr<ID3D11Texture2D> texture;
 
-                // Get texture description
-                D3D11_TEXTURE2D_DESC desc;
-                texture->GetDesc(&desc);
+            // 注意这里用 ABI::Windows::... 而不是 winrt::Windows::...
+            auto dxgiInterfaceAccess = surface.as<
+                ::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
 
-                // Create staging texture for CPU access
-                desc.Usage = D3D11_USAGE_STAGING;
-                desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-                desc.BindFlags = 0;
-                desc.MiscFlags = 0;
+            winrt::check_hresult(dxgiInterfaceAccess->GetInterface(IID_PPV_ARGS(&texture)));
 
-                com_ptr<ID3D11Texture2D> stagingTexture;
-                winrt::check_hresult(
-                    d3d11Device->CreateTexture2D(&desc, nullptr, stagingTexture.put()));
 
-                // Copy to staging texture
-                com_ptr<ID3D11DeviceContext> context;
-                d3d11Device->GetImmediateContext(context.put());
-                context->CopyResource(stagingTexture.get(), texture.get());
 
-                // Map the texture
-                D3D11_MAPPED_SUBRESOURCE mappedResource;
-                winrt::check_hresult(
-                    context->Map(stagingTexture.get(), 0, D3D11_MAP_READ, 0, &mappedResource));
+            D3D11_TEXTURE2D_DESC desc;
+            texture->GetDesc(&desc);
 
-                // Create bitmap data
-                uint32_t dataSize = mappedResource.RowPitch * desc.Height;
-                std::shared_ptr<std::vector<uint8_t>> buffer
-                    = std::make_shared<std::vector<uint8_t>>(dataSize);
-                memcpy(buffer->data(), mappedResource.pData, dataSize);
-                ScreenData outputBuffer;
-                outputBuffer.data = buffer;
-                outputBuffer.RowPitch = mappedResource.RowPitch;
-                outputBuffer.des = desc;
-                emit capturedScreen(outputBuffer);
-                context->Unmap(stagingTexture.get(), 0);
-                frameCondition.notify_one();
+            // 初始化 staging slots
+            if (!initialized) {
+                sharedDesc = desc;
+                sharedDesc.Usage = D3D11_USAGE_STAGING;
+                sharedDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                sharedDesc.BindFlags = 0;
+                sharedDesc.MiscFlags = 0;
 
-            } catch (hresult_error const &ex) {
-                {
+                for (auto& s : StagingSlots) {
+                    winrt::check_hresult(d3d11Device->CreateTexture2D(&sharedDesc, nullptr, s.tex.put()));
+                    D3D11_QUERY_DESC qd{};
+                    qd.Query = D3D11_QUERY_EVENT;
+                    winrt::check_hresult(d3d11Device->CreateQuery(&qd, s.query.put()));
                 }
-                frameCondition.notify_one();
+                initialized = true;
             }
-        } else {
+
+            // 当前写入槽
+            auto& writeSlot = StagingSlots[current];
+            context->CopyResource(writeSlot.tex.get(), texture.get());
+            context->End(writeSlot.query.get());
+            writeSlot.pending = true;
+
+            // 读取上一个槽
+            int readIndex = (current + 1) % StagingSlots.size();
+            auto& readSlot = StagingSlots[readIndex];
+
+            if (readSlot.pending) {
+                HRESULT hr = context->GetData(readSlot.query.get(), nullptr, 0, 0);
+                if (hr == S_OK) {
+                    // GPU 拷贝完成，可以 Map
+                    D3D11_MAPPED_SUBRESOURCE mapped{};
+                    hr = context->Map(readSlot.tex.get(), 0, D3D11_MAP_READ, 0, &mapped);
+                    if (SUCCEEDED(hr)) {
+                        QDateTime t1 = QDateTime::currentDateTime();
+
+                        uint32_t dataSize = mapped.RowPitch * sharedDesc.Height;
+                        auto buffer = std::make_shared<std::vector<uint8_t>>(dataSize);
+                        memcpy(buffer->data(), mapped.pData, dataSize);
+
+                        QDateTime t2 = QDateTime::currentDateTime();
+                        ScreenData output;
+                        output.data = buffer;
+                        output.RowPitch = mapped.RowPitch;
+                        output.des = sharedDesc;
+                        context->Unmap(readSlot.tex.get(), 0);
+                        readSlot.pending = false;
+
+                        QDateTime t3 = QDateTime::currentDateTime();
+                        //qDebug() << "Memcpy:" << t1.msecsTo(t2) << "Total:" << t1.msecsTo(t3);
+
+                        emit capturedScreen(output);
+                    }
+                }
+            }
+
+            current = (current + 1) % StagingSlots.size();
+
+        } catch (hresult_error const& ex) {
+            qWarning() << "Capture error:" << QString::fromWCharArray(ex.message().c_str());
         }
     });
 
     // 7. Start capture
     session.StartCapture();
 
-    while(isCapture){
+    // 8. Message pump
+    while (isCapture) {
         MSG msg;
-        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        QThread::msleep(50);
+        QThread::msleep(30);
     }
+
     // Cleanup
     session.Close();
     framePool.Close();

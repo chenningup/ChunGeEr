@@ -180,7 +180,7 @@ void loop() {
                     }
                     if(cmd == 2)
                     {
-                        Serial.println("mouse move");
+                        
                         int type  = buffer[4];
                         if(type == 1)
                         {
@@ -215,14 +215,17 @@ void loop() {
                         }
 						else if(type == 6)
                         {
+                            Serial.println("mouse MOUSE_RIGHT press");
                             Mouse.press(MOUSE_RIGHT);
                         }
 						else if(type == 7)
                         {
+                            Serial.println("mouse MOUSE_LEFT release");
                             Mouse.release(MOUSE_LEFT);
                         }
 						else if(type == 8)
                         {
+                            Serial.println("mouse MOUSE_RIGHT release");
                             Mouse.release(MOUSE_RIGHT);
                         }
                     }

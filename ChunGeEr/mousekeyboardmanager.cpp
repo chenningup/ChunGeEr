@@ -239,6 +239,7 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
         tmpx+=movex;
         tmpy+=movey;
     }
+    qDebug()<<"mouseMoveDirect leave";
 
 }
 

@@ -94,6 +94,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         service/CatchMonsters/catchmonstersservice.h service/CatchMonsters/catchmonstersservice.cpp
         Ocr/ocrmnager.h Ocr/ocrmnager.cpp
         Control/mouselabel.h Control/mouselabel.cpp
+        Ui/screensharewidget.h Ui/screensharewidget.cpp Ui/screensharewidget.ui
+
     )
 target_include_directories(ChunGeEr PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

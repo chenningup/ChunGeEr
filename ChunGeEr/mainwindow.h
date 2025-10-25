@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include "nlohmann/json.hpp"
 #include "service/baseservice.h"
+#include "Ui/screensharewidget.h"
 using json =  nlohmann::json;
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -22,15 +23,13 @@ private slots:
     void clientRecMegSlot(const json &msg);
     void on_screenShareButton_clicked();
 
-    void screenShowSlot(QImage pic);
-
     void clientConnectToServer();
     void clientDisConnectToServer();
     void ServerRecClientConnect(QString ip);
     void ServerRecClientDisConnect(QString ip);
 private:
     Ui::MainWindow *ui;
-
+    ScreenShareWidget *screenShareUi;
     std::shared_ptr<BaseService>mService;
 };
 #endif // MAINWINDOW_H

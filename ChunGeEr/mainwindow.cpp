@@ -22,6 +22,7 @@ QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , screenShareUi(new ScreenShareWidget)
 {
     ui->setupUi(this);
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");
@@ -43,8 +44,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&WsManager::Instance(),&WsManager::clientDisConnectToServer,this,&MainWindow::clientDisConnectToServer,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::ServerRecClientConnect,this,&MainWindow::ServerRecClientConnect,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::ServerRecClientDisConnect,this,&MainWindow::ServerRecClientDisConnect,Qt::QueuedConnection);
-    connect(&ScreenShare::Instance(),&ScreenShare::showScreen,this,&MainWindow::screenShowSlot,Qt::QueuedConnection);
-
 
     WsManager::Instance().init();
     if(isMaster)
@@ -94,6 +93,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+    delete screenShareUi;
 }
 
 void MainWindow::on_testButton_clicked()
@@ -306,6 +306,8 @@ void MainWindow::on_screenShareButton_clicked()
         data["OperateType"] = "Start";
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
+        screenShareUi->setWindowFlags(Qt::Window);
+        screenShareUi->showFullScreen();
     }
     else if (clickedButton->text() == "结束")
     {
@@ -317,13 +319,11 @@ void MainWindow::on_screenShareButton_clicked()
         data["OperateType"] = "Stop";
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
+        screenShareUi->setWindowFlags(Qt::SubWindow);
+        screenShareUi->hide();
     }
 }
 
-void MainWindow::screenShowSlot(QImage pic)
-{
-    ui->label->setPixmap(QPixmap::fromImage(pic));
-}
 
 void MainWindow::clientConnectToServer()
 {

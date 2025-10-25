@@ -10,7 +10,7 @@
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "imm32.lib")
 static QHash<int,int>keyHash ={
-    {0xC0,0x35},
+    {0xC0,96},
     {121,0xCB},
     {122,0xCC},
 };

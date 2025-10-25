@@ -72,6 +72,7 @@ MainWindow::MainWindow(QWidget *parent)
     // MouseKeyboardManager::Instance().keyRelease('1');
     // MouseKeyboardManager::Instance().mousePress(2);
     // MouseKeyboardManager::Instance().mouseRelease(2);
+    //MouseKeyboardManager::Instance().mouseMoveDirect(1900,500);
     // while(true)
     // {
     //     QPoint current = QCursor::pos();

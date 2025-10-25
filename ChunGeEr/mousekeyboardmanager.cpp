@@ -6,6 +6,7 @@
 #include <QCursor>
 #include <random>
 #include <windows.h>
+#include <cmath>
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "imm32.lib")
 static uint16_t crc_16(uint8_t *data, uint16_t len)
@@ -192,7 +193,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     {
         return ;
     }
-    qDebug() <<"move x:"<<x<<",move y:"<<y;
+    //qDebug() <<"move x:"<<x<<",move y:"<<y;
     unsigned char tmp[100] = {0} ;
     char data[100] = {0};
     data[0] =  0x02;
@@ -207,8 +208,38 @@ void MouseKeyboardManager::moveMouse(int x, int y)
 
 void MouseKeyboardManager::mouseMoveDirect(int x, int y)
 {
+    qDebug()<<"mouseMoveDirect enter:" << x << y;
     QPoint current = QCursor::pos();
-    moveMouse(x - current.x() , y - current.y());
+    int moveXpiece = x - current.x() > 0 ? 100 : -100;
+    int moveYpiece = y - current.y() > 0 ? 100 : -100;
+    int tmpx = current.x();
+    int tmpy = current.y();
+    while( tmpx != x || tmpy != y)
+    {
+        int movex;
+        int movey;
+        if(x - tmpx > 100 || x - tmpx < -100)
+        {
+            movex = moveXpiece;
+        }
+        else
+        {
+            movex = x - tmpx;
+        }
+        if(y - tmpy > 100 || y - tmpy < -100)
+        {
+            movey = moveYpiece;
+        }
+        else
+        {
+            movey = y - tmpy;
+        }
+        qDebug()<<"tmp mouseMoveDirect :" << movex << movey;
+        moveMouse(movex,movey);
+        tmpx+=movex;
+        tmpy+=movey;
+    }
+
 }
 
 void MouseKeyboardManager::mousePress(int type)

@@ -3,6 +3,7 @@
 #include "../screenshare.h"
 #include"../keyboardlistener.h"
 #include <QGuiApplication>
+#include "../mousekeyboardmanager.h"
 extern bool isMaster;
 MouseLabel::MouseLabel(QWidget *parent)
     : QLabel(parent)

@@ -9,6 +9,11 @@
 #include <cmath>
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "imm32.lib")
+static QHash<int,int>keyHash ={
+    {0xC0,0x35},
+    {121,0xCB},
+    {122,0xCC},
+};
 static uint16_t crc_16(uint8_t *data, uint16_t len)
 {
     uint16_t crc_reg = 0xffff;
@@ -294,13 +299,21 @@ void MouseKeyboardManager::keyPress(int key)
 //    key[9] = 0x81;
 //    qDebug()<<"write";
 //    serial.write((const char *)key,10);
-
+    int endkey = key;
+    if(keyHash.contains(key))
+    {
+        endkey = key;
+    }
+    if(key>=65 && key<=90)
+    {
+        endkey = key+32;
+    }
 
     unsigned char tmp[100] = {0} ;
     QByteArray array;
     array.push_back(0x01);
     array.push_back(0x01);
-    array.push_back(key);
+    array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
     serial.flush();
@@ -311,11 +324,20 @@ void MouseKeyboardManager::keyPress(int key)
 
 void MouseKeyboardManager::keyRelease(int key)
 {
+    int endkey = key;
+    if(keyHash.contains(key))
+    {
+        endkey = key;
+    }
+    if(key>=65 && key<=90)
+    {
+        endkey = key+32;
+    }
     unsigned char tmp[100] = {0} ;
     QByteArray array;
     array.push_back(0x01);
     array.push_back(0x02);
-    array.push_back(key);
+    array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
     serial.flush();

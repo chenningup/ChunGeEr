@@ -63,8 +63,8 @@ MainWindow::MainWindow(QWidget *parent)
     //MouseKeyboardManager::Instance().clickButton(" ");
     //MouseKeyboardManager::Instance().mouseClick();
     //MouseKeyboardManager::Instance().humanMouseMove(10,10);
-    QPoint current = QCursor::pos();
-    qDebug()<<"steps"<<current;
+    //QPoint current = QCursor::pos();
+    //qDebug()<<"steps"<<current;
     // MouseKeyboardManager::Instance().moveMouse(-30,-30);
     // MouseKeyboardManager::Instance().moveMouse(-30,-30);
     // MouseKeyboardManager::Instance().keyPress('1');
@@ -76,10 +76,10 @@ MainWindow::MainWindow(QWidget *parent)
     // {
     //     QPoint current = QCursor::pos();
     //     qDebug()<<"steps"<<current;
-    QThread::sleep(1);
+    //QThread::sleep(1);
     // }
-    current = QCursor::pos();
-    qDebug()<<"steps"<<current;
+    // current = QCursor::pos();
+    // qDebug()<<"steps"<<current;
     //MouseKeyboardManager::Instance().mouseDoubleClick();
     //MouseKeyboardManager::Instance().mouseRightClick();
     //MouseKeyboardManager::Instance().clickButton(KEY_BACKSPACE);

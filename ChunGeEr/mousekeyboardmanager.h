@@ -80,6 +80,10 @@
 #define KEY_F22           0xF9
 #define KEY_F23           0xFA
 #define KEY_F24           0xFB
+
+
+#define MOUSE_LEFT 1
+#define MOUSE_RIGHT 2
 class MouseKeyboardManager : public QObject
 {
     Q_OBJECT
@@ -90,23 +94,26 @@ public:
 
     void init();
 
+    bool isOpen();
+
     void clickButton(const QString &button);
-
     void clickButton(int button);
-
     void humanMouseMove(int endX, int endY);
-
     void mouseClick();
-
     void mouseDoubleClick();
-
     void mouseRightClick();
-
     void moveMouse(int x, int y);
+
+public:
+    void mouseMoveDirect(int x, int y);
+    void mousePress(int type);
+    void mouseRelease(int type);
+    void keyPress(int key);
+    void keyRelease(int key);
 signals:
 
 private:
-    void createPacket(char * dist,char * data,int datasize);
+    int createPacket(char * dist,char * data,int datasize);
 private:
     QSerialPort serial;
 

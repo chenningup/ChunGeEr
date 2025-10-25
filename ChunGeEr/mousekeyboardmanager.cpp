@@ -105,6 +105,11 @@ void MouseKeyboardManager::init()
     timer.start();
 }
 
+bool MouseKeyboardManager::isOpen()
+{
+    return serial.isOpen();
+}
+
 void MouseKeyboardManager::clickButton(const QString &button)
 {
     if(!serial.isOpen() || button.isEmpty())
@@ -113,7 +118,6 @@ void MouseKeyboardManager::clickButton(const QString &button)
     }
 
     QByteArray ba = button.toLatin1();
-    QThread::sleep(5);
     unsigned char key[100] = {0} ;
     key[0] = 0x66;
     key[1] = 0x68;
@@ -128,16 +132,6 @@ void MouseKeyboardManager::clickButton(const QString &button)
     memcpy(&key[4+button.size()],&crc,sizeof(uint16_t));
     key[5+button.size() + 2] = 0x5B;
     key[5+button.size() + 3] = 0x81;
-
-    // QByteArray data;
-    // data.append(0x66);
-    // data.append(0x68);
-    // data.append(0x01);
-    // data.append(0x61);
-    // data.append(0xC1);
-    // data.append(0xC8);
-    // data.append(0x5B);
-    // data.append(0x81);
     qDebug()<<"write";
     serial.write((const char *)key,5+button.size() + 4);
 }
@@ -198,25 +192,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     {
         return ;
     }
-    // 转换为当前窗口坐标
-    //QPoint windowPos = this->mapFromGlobal(globalPos);
-    //qDebug() << "Current Window Position:" << windowPos;
     qDebug() <<"move x:"<<x<<",move y:"<<y;
-    unsigned char key[100] = {0} ;
-    key[0] = 0x66;
-    key[1] = 0x68;
-    key[2] = 2 + 8 + 2;
-    key[3] = 0x02;
-    key[4] = 1;
-    memcpy(&key[5],&x,sizeof(int));
-    memcpy(&key[9],&y,sizeof(int));
-    uint16_t crc= crc_16(&key[3],2+8);
-    memcpy(&key[13],&crc,sizeof(uint16_t));
-    key[15] = 0x5B;
-    key[16] = 0x81;
-    qDebug()<<"write";
-
-
     unsigned char tmp[100] = {0} ;
     char data[100] = {0};
     data[0] =  0x02;
@@ -224,13 +200,82 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     memcpy(&data[2],&x,sizeof(int));
     memcpy(&data[6],&y,sizeof(int));
     createPacket((char*)tmp,data,10);
-
     serial.write((const char *)tmp,10 + 3 + 4);
     serial.flush();
     serial.waitForBytesWritten();
 }
 
-void MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
+void MouseKeyboardManager::mouseMoveDirect(int x, int y)
+{
+    QPoint current = QCursor::pos();
+    moveMouse(x - current.x() , y - current.y());
+}
+
+void MouseKeyboardManager::mousePress(int type)
+{
+    unsigned char tmp[100] = {0} ;
+    QByteArray array;
+    array.push_back(0x02);
+    array.push_back(type == MOUSE_LEFT ? 5 : 6);
+    int size = createPacket((char*)tmp,array.data(),array.size());
+    serial.write((const char *)tmp,size);
+    serial.flush();
+    serial.waitForBytesWritten();
+}
+
+void MouseKeyboardManager::mouseRelease(int type)
+{
+    unsigned char tmp[100] = {0} ;
+    QByteArray array;
+    array.push_back(0x02);
+    array.push_back(type == MOUSE_LEFT ? 7 : 8);
+    int size = createPacket((char*)tmp,array.data(),array.size());
+    serial.write((const char *)tmp,size);
+    serial.flush();
+    serial.waitForBytesWritten();
+}
+
+void MouseKeyboardManager::keyPress(int key)
+{
+//    unsigned char key[100] = {0} ;
+//    key[3] = 0x01;
+//    key[4] = 1;
+//    key[5] = button;
+//    uint16_t crc= crc_16(&key[3],3);
+//    memcpy(&key[6],&crc,sizeof(uint16_t));
+//    key[8] = 0x5B;
+//    key[9] = 0x81;
+//    qDebug()<<"write";
+//    serial.write((const char *)key,10);
+
+
+    unsigned char tmp[100] = {0} ;
+    QByteArray array;
+    array.push_back(0x01);
+    array.push_back(0x01);
+    array.push_back(key);
+    int size = createPacket((char*)tmp,array.data(),array.size());
+    serial.write((const char *)tmp,size);
+    serial.flush();
+    serial.waitForBytesWritten();
+
+}
+
+
+void MouseKeyboardManager::keyRelease(int key)
+{
+    unsigned char tmp[100] = {0} ;
+    QByteArray array;
+    array.push_back(0x01);
+    array.push_back(0x02);
+    array.push_back(key);
+    int size = createPacket((char*)tmp,array.data(),array.size());
+    serial.write((const char *)tmp,size);
+    serial.flush();
+    serial.waitForBytesWritten();
+}
+
+int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
 {
     (*dist) = 0x66;
     *(dist + 1) = 0x68;
@@ -240,6 +285,7 @@ void MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
     memcpy(dist + 3 + datasize,&crc,sizeof(uint16_t));
     *(dist + 3+ datasize +2) = 0x5B;
     *(dist + 3+ datasize +3) = 0x81;
+    return 3+datasize+4;
 }
 
 

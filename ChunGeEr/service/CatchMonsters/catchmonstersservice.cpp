@@ -102,6 +102,6 @@ void CatchMonstersService::startService()
 
 void CatchMonstersService::stopService()
 {
-
+    toRun = false;
 }
 

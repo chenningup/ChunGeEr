@@ -170,6 +170,7 @@ void ClientDungeonService::startService()
 void ClientDungeonService::stopService()
 {
     toRun = false;
+    taskSem.release();
 }
 
 void ClientDungeonService::clientHandleRecMsg(const json &data)

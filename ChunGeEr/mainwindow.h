@@ -33,5 +33,6 @@ private:
     Ui::MainWindow *ui;
     ScreenShareWidget *screenShareUi;
     std::shared_ptr<BaseService>mService;
+    std::shared_ptr<BaseService>mLastService;
 };
 #endif // MAINWINDOW_H

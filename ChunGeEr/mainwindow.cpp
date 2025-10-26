@@ -123,6 +123,7 @@ void MainWindow::clientRecMegSlot(const json &msg)
             {
                 std::shared_ptr<ClientDungeonService>service = std::make_shared<ClientDungeonService>();
                 service->startService();
+                mLastService = mService;
                 mService = service;
             }
             return;
@@ -357,6 +358,7 @@ void MainWindow::on_dungeonPushButton_clicked()
         if(mService)
         {
             mService->stopService();
+            mLastService = mService;
         }
         std::shared_ptr<ServerDungeonService>serivce = std::make_shared<ServerDungeonService>();
         serivce->startService();

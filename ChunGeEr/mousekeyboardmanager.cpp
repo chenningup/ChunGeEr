@@ -327,7 +327,7 @@ void MouseKeyboardManager::keyRelease(int key)
     int endkey = key;
     if(keyHash.contains(key))
     {
-        endkey = key;
+        endkey =  keyHash[key];
     }
     if(key>=65 && key<=90)
     {

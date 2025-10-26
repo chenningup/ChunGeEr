@@ -1,5 +1,6 @@
 #include "baseservice.h"
 #include "../keyboardlistener.h"
+#include "../mousekeyboardmanager.h"
 BaseService::BaseService(QObject *parent)
     : QThread{parent},toRun(false)
 {
@@ -21,6 +22,24 @@ void BaseService::clientHandleRecMsg(const json &data)
 void BaseService::handlePressEvent(int vkCode)
 {
 
+}
+
+void BaseService::chooseLeftGame()
+{
+    MouseKeyboardManager::Instance().mouseMoveDirect(200,10);
+    QThread::sleep(1);
+    MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+    QThread::msleep(200);
+    MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+}
+
+void BaseService::chooseRightGame()
+{
+    MouseKeyboardManager::Instance().mouseMoveDirect(1500,10);
+    QThread::sleep(1);
+    MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+    QThread::msleep(200);
+    MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
 }
 
 void BaseService::receiveCaptureScreen(ScreenCaptureManager::ScreenData data)

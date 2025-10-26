@@ -4,6 +4,7 @@
 #include "../../wsmanager.h"
 #include <QDebug>
 #include "../../mousekeyboardmanager.h"
+
 //{
 //    "cmd": "KeyboardSync",
 //    "data": {
@@ -110,44 +111,36 @@ void ClientDungeonService::run()
         taskMutex.unlock();
         if(task == "PickUp")
         {
-            MouseKeyboardManager::Instance().mouseMoveDirect(200,10);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().keyPress(192);
-            MouseKeyboardManager::Instance().keyRelease(192);
-
-            MouseKeyboardManager::Instance().mouseMoveDirect(1500,10);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().keyPress(192);
-            MouseKeyboardManager::Instance().keyRelease(192);
+            qDebug()<<"PickUp";
+            chooseLeftGame();
+            QThread::sleep(1);
+            MouseKeyboardManager::Instance().clickButton(192);
+            QThread::sleep(1);
+            chooseRightGame();
+            QThread::sleep(1);
+            MouseKeyboardManager::Instance().clickButton(192);
         }
         if(task == "FollowLeader")
         {
-            MouseKeyboardManager::Instance().mouseMoveDirect(200,10);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
-
+            qDebug()<<"FollowLeader";
+            chooseLeftGame();
             MouseKeyboardManager::Instance().mouseMoveDirect(42,192);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
-
+            QThread::sleep(1);
+            MouseKeyboardManager::Instance().mouseRightClick();
+            QThread::sleep(1);
             MouseKeyboardManager::Instance().mouseMoveDirect(42 + 61,192 + 55);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            QThread::sleep(1);
+            MouseKeyboardManager::Instance().mouseClick();
 
-
-            MouseKeyboardManager::Instance().mouseMoveDirect(1500,10);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            chooseRightGame();
 
             MouseKeyboardManager::Instance().mouseMoveDirect(932,192);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
-
+            QThread::sleep(1);
+            MouseKeyboardManager::Instance().mouseRightClick();
+            QThread::sleep(1);
             MouseKeyboardManager::Instance().mouseMoveDirect(932 + 61,192 + 55);
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            QThread::sleep(1);
+            MouseKeyboardManager::Instance().mouseClick();
             qDebug()<<"FollowLeader";
         }
         if(task == "UseSkill")

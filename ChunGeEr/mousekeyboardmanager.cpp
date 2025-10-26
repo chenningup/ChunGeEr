@@ -144,20 +144,9 @@ void MouseKeyboardManager::clickButton(const QString &button)
 
 void MouseKeyboardManager::clickButton(int button)
 {
-    QThread::sleep(5);
-    unsigned char key[100] = {0} ;
-    key[0] = 0x66;
-    key[1] = 0x68;
-    key[2] = 0x05;
-    key[3] = 0x01;
-    key[4] = 1;
-    key[5] = button;
-    uint16_t crc= crc_16(&key[3],3);
-    memcpy(&key[6],&crc,sizeof(uint16_t));
-    key[8] = 0x5B;
-    key[9] = 0x81;
-    qDebug()<<"write";
-    serial.write((const char *)key,10);
+    keyPress(button);
+    QThread::sleep(200);
+    keyRelease(button);
 }
 
 void MouseKeyboardManager::humanMouseMove(int endX, int endY)
@@ -360,18 +349,9 @@ int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
 
 void MouseKeyboardManager::mouseClick()
 {
-    unsigned char key[100] = {0} ;
-    key[0] = 0x66;
-    key[1] = 0x68;
-    key[2] = 0x02;
-    key[2] = 0x02;
-    key[3] = 2;
-    uint16_t crc= crc_16(&key[2],2);
-    memcpy(&key[4],&crc,sizeof(uint16_t));
-    key[6] = 0x5B;
-    key[7] = 0x81;
-    qDebug()<<"write";
-    serial.write((const char *)key,4+ 4);
+    mousePress(MOUSE_LEFT);
+    QThread::sleep(200);
+    mouseRelease(MOUSE_LEFT);
 }
 
 void MouseKeyboardManager::mouseDoubleClick()
@@ -391,15 +371,7 @@ void MouseKeyboardManager::mouseDoubleClick()
 
 void MouseKeyboardManager::mouseRightClick()
 {
-    unsigned char key[100] = {0} ;
-    key[0] = 0x66;
-    key[1] = 0x68;
-    key[2] = 0x02;
-    key[3] = 4;
-    uint16_t crc= crc_16(&key[2],2);
-    memcpy(&key[4],&crc,sizeof(uint16_t));
-    key[6] = 0x5B;
-    key[7] = 0x81;
-    qDebug()<<"write";
-    serial.write((const char *)key,4+ 4);
+    mousePress(MOUSE_RIGHT);
+    QThread::sleep(200);
+    mouseRelease(MOUSE_RIGHT);
 }

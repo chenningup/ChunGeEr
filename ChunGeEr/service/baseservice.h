@@ -20,6 +20,10 @@ public:
     virtual void startService()=0;
 
     virtual void stopService()=0;
+
+    void chooseLeftGame();
+
+    void chooseRightGame();
 signals:
 
 public slots:

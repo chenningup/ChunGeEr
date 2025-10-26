@@ -345,3 +345,42 @@ void MainWindow::ServerRecClientDisConnect(QString ip)
     ui->statuslabel->setText("已断开");
 }
 
+
+void MainWindow::on_dungeonPushButton_clicked()
+{
+    QObject *senderObj = sender();
+    // 2. 安全地转换为具体的按钮类型
+    QPushButton *clickedButton = qobject_cast<QPushButton*>(senderObj);
+    if (clickedButton->text() == "副本")
+    {
+        clickedButton->setText("结束");
+        if(mService)
+        {
+            mService->stopService();
+        }
+        std::shared_ptr<ServerDungeonService>serivce = std::make_shared<ServerDungeonService>();
+        serivce->startService();
+        mService = serivce;
+        json cmd ;
+        cmd["cmd"] = "StartService";
+        json data;
+        data["ServiceName"] = "DungeonService";
+        cmd["data"] = data;
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+    else if (clickedButton->text() == "结束")
+    {
+        clickedButton->setText("副本");
+        if(mService)
+        {
+            mService->stopService();
+        }
+        json cmd ;
+        cmd["cmd"] = "StopService";
+        json data;
+        data["ServiceName"] = "DungeonService";
+        cmd["data"] = data;
+        WsManager::Instance().sendMsgToClient(cmd.dump());
+    }
+}
+

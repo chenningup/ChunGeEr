@@ -27,6 +27,8 @@ private slots:
     void clientDisConnectToServer();
     void ServerRecClientConnect(QString ip);
     void ServerRecClientDisConnect(QString ip);
+    void on_dungeonPushButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     ScreenShareWidget *screenShareUi;

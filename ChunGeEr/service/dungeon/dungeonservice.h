@@ -3,6 +3,8 @@
 
 #include <QWidget>
 #include "../baseservice.h"
+#include <QMutex>
+#include <QSemaphore>
 class ServerDungeonService : public BaseService
 {
     Q_OBJECT
@@ -39,6 +41,9 @@ public:
 
 signals:
 
+private:
+    QMutex taskMutex;
+    QSemaphore taskSem;
 };
 
 

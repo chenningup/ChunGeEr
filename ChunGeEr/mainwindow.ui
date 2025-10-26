@@ -32,6 +32,13 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="dungeonPushButton">
+        <property name="text">
+         <string>副本</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="testButton">
         <property name="text">
          <string>test</string>

@@ -3,6 +3,7 @@
 #include "screencapturemanager.h"
 #include "../../wsmanager.h"
 #include <QDebug>
+#include "../../mousekeyboardmanager.h"
 //{
 //    "cmd": "KeyboardSync",
 //    "data": {
@@ -51,39 +52,34 @@ void ServerDungeonService::handlePressEvent(int vkCode)
     qDebug()<<"handlePressEvent"<<vkCode;
     switch(vkCode)
     {
-    case 192:
+    case 112:
     {
         json cmd ;
-        cmd["cmd"] = "KeyboardSync";
-        json data;
-        data["key"] = vkCode;
-        cmd["data"] = data;
+        cmd["cmd"] = "PickUp";
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
     break;
-    case 70:
+    case 113:
     {
         json cmd ;
         cmd["cmd"] = "FollowLeader";
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
     break;
-    case 71:
+    case 114:
     {
         json cmd ;
         cmd["cmd"] = "UseSkill";
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
     break;
-    case 72:
+    case 115:
     {
         json cmd ;
         cmd["cmd"] = "FollowSup";
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
     break;
-
-
     }
 
 }
@@ -103,24 +99,65 @@ void ClientDungeonService::run()
 {
     while(toRun)
     {
+        taskSem.acquire();
+        QString task;
+        taskMutex.lock();
         if(!tasks.isEmpty())
         {
-            QString task = tasks[0];
-            if(task == "FollowLeader")
-            {
-                qDebug()<<"FollowLeader";
-            }
-            if(task == "UseSkill")
-            {
-                qDebug()<<"UseSkill";
-            }
-            if(task == "FollowSup")
-            {
-                qDebug()<<"FollowSup";
-            }
+            task = tasks[0];
             tasks.pop_front();
         }
-        QThread::msleep(300);
+        taskMutex.unlock();
+        if(task == "PickUp")
+        {
+            MouseKeyboardManager::Instance().mouseMoveDirect(200,10);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().keyPress(192);
+            MouseKeyboardManager::Instance().keyRelease(192);
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(1500,10);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().keyPress(192);
+            MouseKeyboardManager::Instance().keyRelease(192);
+        }
+        if(task == "FollowLeader")
+        {
+            MouseKeyboardManager::Instance().mouseMoveDirect(200,10);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(42,192);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 61,192 + 55);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(1500,10);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(932,192);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 61,192 + 55);
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            qDebug()<<"FollowLeader";
+        }
+        if(task == "UseSkill")
+        {
+            qDebug()<<"UseSkill";
+        }
+        if(task == "FollowSup")
+        {
+            qDebug()<<"FollowSup";
+        }
     }
 }
 
@@ -140,26 +177,9 @@ void ClientDungeonService::clientHandleRecMsg(const json &data)
     if(data.contains("cmd"))
     {
         std::string cmd = data["cmd"].get<std::string>();
-        if(cmd == "KeyboardSync")
-        {
-            int key = data["data"]["key"].get<int>();
-            qDebug()<<"click key "<< key;
-            return;
-        }
-        if(cmd == "FollowLeader")
-        {
-            tasks.push_back("FollowLeader");
-            return;
-        }
-        if(cmd == "UseSkill")
-        {
-            tasks.push_back("UseSkill");
-            return;
-        }
-        if(cmd == "FollowSup")
-        {
-            tasks.push_back("FollowSup");
-            return;
-        }
+        taskMutex.lock();
+        tasks.push_back(QString::fromStdString(cmd));
+        taskMutex.unlock();
+        return;
     }
 }

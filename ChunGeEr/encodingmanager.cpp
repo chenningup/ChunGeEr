@@ -42,7 +42,7 @@ void EncodingManager::init()
     m_codecContext->time_base = {1, 30};
     m_codecContext->framerate = {30, 1};
     m_codecContext->pix_fmt = AV_PIX_FMT_YUV420P;
-    m_codecContext->bit_rate = 1000000; // 1 Mbps
+    m_codecContext->bit_rate = 2000000; // 1 Mbps
     m_codecContext->max_b_frames = 0;          // 禁用B帧，减少内部缓存
     m_codecContext->has_b_frames = 0;
     m_codecContext->gop_size = 30;             // GOP长度

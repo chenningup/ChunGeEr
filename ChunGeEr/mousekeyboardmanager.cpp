@@ -145,7 +145,7 @@ void MouseKeyboardManager::clickButton(const QString &button)
 void MouseKeyboardManager::clickButton(int button)
 {
     keyPress(button);
-    QThread::sleep(200);
+    QThread::msleep(200);
     keyRelease(button);
 }
 
@@ -350,7 +350,7 @@ int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
 void MouseKeyboardManager::mouseClick()
 {
     mousePress(MOUSE_LEFT);
-    QThread::sleep(200);
+    QThread::msleep(200);
     mouseRelease(MOUSE_LEFT);
 }
 
@@ -372,6 +372,6 @@ void MouseKeyboardManager::mouseDoubleClick()
 void MouseKeyboardManager::mouseRightClick()
 {
     mousePress(MOUSE_RIGHT);
-    QThread::sleep(200);
+    QThread::msleep(200);
     mouseRelease(MOUSE_RIGHT);
 }

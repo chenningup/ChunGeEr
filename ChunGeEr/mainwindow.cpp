@@ -69,14 +69,16 @@ MainWindow::MainWindow(QWidget *parent)
     // MouseKeyboardManager::Instance().moveMouse(-30,-30);
     // MouseKeyboardManager::Instance().keyPress('1');
     // MouseKeyboardManager::Instance().keyRelease('1');
-    // MouseKeyboardManager::Instance().mousePress(2);
+    //QThread::sleep(5);
+    //MouseKeyboardManager::Instance().clickButton('a');
+    //qDebug()<<"click button";
     // MouseKeyboardManager::Instance().mouseRelease(2);
     //MouseKeyboardManager::Instance().mouseMoveDirect(1900,500);
     // while(true)
     // {
     //     QPoint current = QCursor::pos();
     //     qDebug()<<"steps"<<current;
-    //QThread::sleep(1);
+    //QThread::sleepa(1);
     // }
     // current = QCursor::pos();
     // qDebug()<<"steps"<<current;

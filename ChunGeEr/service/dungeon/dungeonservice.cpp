@@ -181,6 +181,7 @@ void ClientDungeonService::clientHandleRecMsg(const json &data)
         taskMutex.lock();
         tasks.push_back(QString::fromStdString(cmd));
         taskMutex.unlock();
+        taskSem.release();
         return;
     }
 }

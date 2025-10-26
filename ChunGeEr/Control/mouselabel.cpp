@@ -147,6 +147,10 @@ void MouseLabel::mouseReleaseEvent(QMouseEvent *event)
 
 void MouseLabel::keyPressEventSlot(int vkCode)
 {
+    if(vkCode >=112 && vkCode<=115)
+    {
+        return;
+    }
     if(isMaster  && ScreenShare::Instance().isRunning() && QGuiApplication::applicationState() == Qt::ApplicationActive)
     {
         json cmd ;
@@ -160,6 +164,10 @@ void MouseLabel::keyPressEventSlot(int vkCode)
 
 void MouseLabel::keyReleaseEventSlot(int vkCode)
 {
+    if(vkCode >=112 && vkCode<=115)
+    {
+        return;
+    }
     if(isMaster  && ScreenShare::Instance().isRunning() && QGuiApplication::applicationState() == Qt::ApplicationActive)
     {
         json cmd ;

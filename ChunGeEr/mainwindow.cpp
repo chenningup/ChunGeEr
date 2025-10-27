@@ -17,6 +17,7 @@
 #include <windows.h>
 #include "Ocr/ocrmnager.h"
 #include "signalslotconnector.h"
+#include <QScreen>
 bool isMaster;
 QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
@@ -318,7 +319,7 @@ void MainWindow::serverRecMegSlot(const json &msg)
     if(msg.contains("cmd"))
     {
         QString cmd = QString::fromStdString(msg["cmd"].get<std::string>());
-        if(cmd = "ClientScreenAnys")
+        if(cmd == "ClientScreenAnys")
         {
             int width = msg["data"]["width"].get<int>();
             int height = msg["data"]["height"].get<int>();

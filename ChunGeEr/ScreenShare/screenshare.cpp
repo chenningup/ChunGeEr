@@ -5,7 +5,7 @@
 #include <QDebug>
 #include "hv/WebSocketClient.h"
 #include "hv/WebSocketServer.h"
-#include "encodingmanager.h"
+#include "../Encode/encodingmanager.h"
 #include <QImage>
 #include "Detector/detectormanager.h"
 static WebSocketService ScreenShareWs;

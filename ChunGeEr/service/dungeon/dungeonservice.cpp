@@ -1,9 +1,9 @@
 #include "dungeonservice.h"
-#include "../../keyboardlistener.h"
+#include "../../KeyboardListener/keyboardlistener.h"
 #include "screencapturemanager.h"
-#include "../../wsmanager.h"
+#include "../../WsManager/wsmanager.h"
 #include <QDebug>
-#include "../../mousekeyboardmanager.h"
+#include "../../LeoControl//mousekeyboardmanager.h"
 
 //{
 //    "cmd": "KeyboardSync",
@@ -113,11 +113,11 @@ void ClientDungeonService::run()
         {
             qDebug()<<"PickUp";
             chooseLeftGame();
-            QThread::sleep(500);
+            QThread::msleep(500);
             MouseKeyboardManager::Instance().clickButton(192);
-            QThread::sleep(500);
+            QThread::msleep(500);
             chooseRightGame();
-            QThread::sleep(500);
+            QThread::msleep(500);
             MouseKeyboardManager::Instance().clickButton(192);
         }
         if(task == "FollowLeader")

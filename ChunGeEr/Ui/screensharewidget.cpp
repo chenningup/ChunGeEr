@@ -1,6 +1,6 @@
 #include "screensharewidget.h"
 #include "ui_screensharewidget.h"
-#include "../screenshare.h"
+#include "../ScreenShare/screenshare.h"
 ScreenShareWidget::ScreenShareWidget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::ScreenShareWidget)

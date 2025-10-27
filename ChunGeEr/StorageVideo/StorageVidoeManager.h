@@ -14,7 +14,7 @@ extern "C" {
 #include <libavutil/hwcontext.h>
 }
 #include "screencapturemanager.h"
-#include "safepacket.h"
+#include "../Commons/safepacket.h"
 #include <QFile>
 class StorageVidoeManager : public QThread
 {

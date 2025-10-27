@@ -1,22 +1,22 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "screencapturemanager.h"
-#include "StorageVidoeManager.h"
-#include "mousekeyboardmanager.h"
+#include "./StorageVideo/StorageVidoeManager.h"
+#include "./LeoControl/mousekeyboardmanager.h"
 
-#include "wsmanager.h"
+#include "./WsManager/wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
 #include "service/CatchMonsters/catchmonstersservice.h"
-#include "keyboardlistener.h"
-#include "encodingmanager.h"
-#include "StorageVidoeManager.h"
-#include "screenshare.h"
+#include "./KeyboardListener/keyboardlistener.h"
+#include "./Encode/encodingmanager.h"
+#include "./StorageVideo/StorageVidoeManager.h"
+#include "./ScreenShare/screenshare.h"
 #include "Detector/detectormanager.h"
 #include <QSettings>
 #include <QDebug>
 #include <windows.h>
 #include "Ocr/ocrmnager.h"
-#include "mousekeyboardmanager.h"
+#include "signalslotconnector.h"
 bool isMaster;
 QString serverIp;
 MainWindow::MainWindow(QWidget *parent)
@@ -39,11 +39,13 @@ MainWindow::MainWindow(QWidget *parent)
     ScreenShare::Instance().init();
     DetectorManager::Instance().init("best.onnx","data.yaml");
     OcrMnager::Instance().init();
+    init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::clientConnectToServer,this,&MainWindow::clientConnectToServer,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::clientDisConnectToServer,this,&MainWindow::clientDisConnectToServer,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::ServerRecClientConnect,this,&MainWindow::ServerRecClientConnect,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::ServerRecClientDisConnect,this,&MainWindow::ServerRecClientDisConnect,Qt::QueuedConnection);
+    connect(&SignalSlotConnector::Instance(),&SignalSlotConnector::log,this,&MainWindow::receiveLog,Qt::QueuedConnection);
 
     WsManager::Instance().init();
     if(isMaster)
@@ -98,6 +100,191 @@ MainWindow::~MainWindow()
     delete screenShareUi;
 }
 
+void MainWindow::init()
+{
+    clientRecHash.insert("StartService",std::bind(&MainWindow::HandelClientRecStartService,this,std::placeholders::_1));
+    clientRecHash.insert("ShareScreen",std::bind(&MainWindow::HandelClientRecShareScreen,this,std::placeholders::_1));
+    clientRecHash.insert("MouseMoveSync",std::bind(&MainWindow::HandelClientRecMouseMoveSync,this,std::placeholders::_1));
+    clientRecHash.insert("MousePressSync",std::bind(&MainWindow::HandelClientRecMousePressSync,this,std::placeholders::_1));
+    clientRecHash.insert("MouseReleaseSync",std::bind(&MainWindow::HandelClientRecMouseReleaseSync,this,std::placeholders::_1));
+    clientRecHash.insert("KeybordPressSync",std::bind(&MainWindow::HandelClientRecKeybordPressSync,this,std::placeholders::_1));
+    clientRecHash.insert("KeybordReleaseSync",std::bind(&MainWindow::HandelClientRecKeybordReleaseSync,this,std::placeholders::_1));
+    clientRecHash.insert("MousewheelSync",std::bind(&MainWindow::HandelClientRecMousewheelSync,this,std::placeholders::_1));
+}
+
+void MainWindow::HandelClientRecStartService(const json &msg)
+{
+    if(mService)
+    {
+        mService->stopService();
+    }
+    std::string serviceName = msg["data"]["ServiceName"].get<std::string>();
+    if(serviceName == "DungeonService")
+    {
+        std::shared_ptr<ClientDungeonService>service = std::make_shared<ClientDungeonService>();
+        service->startService();
+        mLastService = mService;
+        mService = service;
+    }
+}
+
+void MainWindow::HandelClientRecShareScreen(const json &msg)
+{
+    std::string serviceName = msg["data"]["OperateType"].get<std::string>();
+    if(serviceName == "Start")
+    {
+        EncodingManager::Instance().startEncodeing();
+        ScreenCaptureManager::Instance().startCapture();
+        ScreenShare::Instance().startShare();
+    }
+    else
+    {
+        EncodingManager::Instance().stopEncodeing();
+        ScreenCaptureManager::Instance().stopCapture();
+        ScreenShare::Instance().stopShare();
+    }
+}
+
+void MainWindow::HandelClientRecMouseMoveSync(const json &msg)
+{
+    int x = msg["data"]["x"].get<int>();
+    int y = msg["data"]["y"].get<int>();
+    if(MouseKeyboardManager::Instance().isOpen())
+    {
+        MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+    }
+    else
+    {
+        SetCursorPos(x, y);
+    }
+}
+
+void MainWindow::HandelClientRecMousePressSync(const json &msg)
+{
+    int x = msg["data"]["x"].get<int>();
+    int y = msg["data"]["y"].get<int>();
+    if(MouseKeyboardManager::Instance().isOpen())
+    {
+        MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+        std::string type = msg["data"]["type"].get<std::string>();
+        if(type == "left")
+        {
+            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+        }
+        else
+        {
+            MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
+        }
+    }
+    else
+    {
+        SetCursorPos(x, y);
+        std::string type = msg["data"]["type"].get<std::string>();
+        DWORD dwtype;
+        if(type == "left")
+        {
+            dwtype = MOUSEEVENTF_LEFTDOWN;
+        }
+        else
+        {
+            dwtype = MOUSEEVENTF_RIGHTDOWN;
+        }
+        INPUT inputs[1] = {0};
+        inputs[0].type = INPUT_MOUSE;
+        inputs[0].mi.dwFlags = dwtype;
+        SendInput(1, inputs, sizeof(INPUT));
+    }
+}
+
+void MainWindow::HandelClientRecMouseReleaseSync(const json &msg)
+{
+    int x = msg["data"]["x"].get<int>();
+    int y = msg["data"]["y"].get<int>();
+    if(MouseKeyboardManager::Instance().isOpen())
+    {
+        MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+        std::string type = msg["data"]["type"].get<std::string>();
+        if(type == "left")
+        {
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+        }
+        else
+        {
+            MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
+        }
+    }
+    else
+    {
+        SetCursorPos(x, y);
+        std::string type = msg["data"]["type"].get<std::string>();
+        DWORD dwtype;
+        if(type == "left")
+        {
+            dwtype = MOUSEEVENTF_LEFTUP;
+        }
+        else
+        {
+            dwtype = MOUSEEVENTF_RIGHTUP;
+        }
+        INPUT inputs[1] = {0};
+        inputs[0].type = INPUT_MOUSE;
+        inputs[0].mi.dwFlags = dwtype;
+        SendInput(1, inputs, sizeof(INPUT));
+    }
+}
+
+void MainWindow::HandelClientRecKeybordPressSync(const json &msg)
+{
+    int key  = msg["data"]["Key"].get<int>();
+    if(MouseKeyboardManager::Instance().isOpen())
+    {
+        MouseKeyboardManager::Instance().keyPress(key);
+    }
+    else
+    {
+        INPUT ip;
+        ip.type = INPUT_KEYBOARD;
+        ip.ki.wVk = key; // 'A' 的虚拟键码
+        ip.ki.dwFlags = 0; // 0 表示按下
+        SendInput(1, &ip, sizeof(INPUT));
+
+        // 设置键盘释放事件
+        ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
+        SendInput(1, &ip, sizeof(INPUT));
+    }
+}
+
+void MainWindow::HandelClientRecKeybordReleaseSync(const json &msg)
+{
+    int key  = msg["data"]["Key"].get<int>();
+    if(MouseKeyboardManager::Instance().isOpen())
+    {
+        MouseKeyboardManager::Instance().keyRelease(key);
+    }
+    else
+    {
+
+        INPUT ip;
+        ip.type = INPUT_KEYBOARD;
+        ip.ki.wVk = key; // 'A' 的虚拟键码
+
+        // 设置键盘释放事件
+        ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
+        SendInput(1, &ip, sizeof(INPUT));
+    }
+}
+
+void MainWindow::HandelClientRecMousewheelSync(const json &msg)
+{
+    int dis  = msg["data"]["dis"].get<int>();
+    INPUT input;
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+    input.mi.mouseData = dis;  // 正数向上滚动，负数向下滚动
+
+    SendInput(1, &input, sizeof(INPUT));
+}
+
 void MainWindow::on_testButton_clicked()
 {
     //    ServerDungeonService *serivce = new ServerDungeonService();
@@ -112,182 +299,10 @@ void MainWindow::clientRecMegSlot(const json &msg)
 {
     if(msg.contains("cmd"))
     {
-        std::string cmd = msg["cmd"].get<std::string>();
-
-        if(cmd == "StartService")
+        QString cmd = QString::fromStdString(msg["cmd"].get<std::string>());
+        if(clientRecHash.contains(cmd))
         {
-            if(mService)
-            {
-                mService->stopService();
-            }
-            std::string serviceName = msg["data"]["ServiceName"].get<std::string>();
-            if(serviceName == "DungeonService")
-            {
-                std::shared_ptr<ClientDungeonService>service = std::make_shared<ClientDungeonService>();
-                service->startService();
-                mLastService = mService;
-                mService = service;
-            }
-            return;
-            //qDebug()<<"click key "<< key;
-        }
-        if(cmd == "ShareScreen")
-        {
-            std::string serviceName = msg["data"]["OperateType"].get<std::string>();
-            if(serviceName == "Start")
-            {
-                EncodingManager::Instance().startEncodeing();
-                ScreenCaptureManager::Instance().startCapture();
-                ScreenShare::Instance().startShare();
-            }
-            else
-            {
-                EncodingManager::Instance().stopEncodeing();
-                ScreenCaptureManager::Instance().stopCapture();
-                ScreenShare::Instance().stopShare();
-            }
-            return;
-        }
-        if(cmd == "MouseMoveSync")
-        {
-            int x = msg["data"]["x"].get<int>();
-            int y = msg["data"]["y"].get<int>();
-            if(MouseKeyboardManager::Instance().isOpen())
-            {
-                MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
-            }
-            else
-            {
-                SetCursorPos(x, y);
-            }
-            return;
-        }
-        if(cmd == "MousePressSync")
-        {
-            int x = msg["data"]["x"].get<int>();
-            int y = msg["data"]["y"].get<int>();
-            if(MouseKeyboardManager::Instance().isOpen())
-            {
-                MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
-                std::string type = msg["data"]["type"].get<std::string>();
-                if(type == "left")
-                {
-                    MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
-                }
-                else
-                {
-                    MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
-                }
-            }
-            else
-            {
-                SetCursorPos(x, y);
-                std::string type = msg["data"]["type"].get<std::string>();
-                DWORD dwtype;
-                if(type == "left")
-                {
-                    dwtype = MOUSEEVENTF_LEFTDOWN;
-                }
-                else
-                {
-                    dwtype = MOUSEEVENTF_RIGHTDOWN;
-                }
-                INPUT inputs[1] = {0};
-                inputs[0].type = INPUT_MOUSE;
-                inputs[0].mi.dwFlags = dwtype;
-                SendInput(1, inputs, sizeof(INPUT));
-            }
-            return;
-        }
-        if(cmd == "MouseReleaseSync")
-        {
-            int x = msg["data"]["x"].get<int>();
-            int y = msg["data"]["y"].get<int>();
-            if(MouseKeyboardManager::Instance().isOpen())
-            {
-                MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
-                std::string type = msg["data"]["type"].get<std::string>();
-                if(type == "left")
-                {
-                    MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
-                }
-                else
-                {
-                    MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
-                }
-            }
-            else
-            {
-                SetCursorPos(x, y);
-                std::string type = msg["data"]["type"].get<std::string>();
-                DWORD dwtype;
-                if(type == "left")
-                {
-                    dwtype = MOUSEEVENTF_LEFTUP;
-                }
-                else
-                {
-                    dwtype = MOUSEEVENTF_RIGHTUP;
-                }
-                INPUT inputs[1] = {0};
-                inputs[0].type = INPUT_MOUSE;
-                inputs[0].mi.dwFlags = dwtype;
-                SendInput(1, inputs, sizeof(INPUT));
-            }
-            return;
-        }
-        if( cmd == "KeybordPressSync" )
-        {
-            int key  = msg["data"]["Key"].get<int>();
-            if(MouseKeyboardManager::Instance().isOpen())
-            {
-                MouseKeyboardManager::Instance().keyPress(key);
-            }
-            else
-            {
-                INPUT ip;
-                ip.type = INPUT_KEYBOARD;
-                ip.ki.wVk = key; // 'A' 的虚拟键码
-                ip.ki.dwFlags = 0; // 0 表示按下
-                SendInput(1, &ip, sizeof(INPUT));
-
-                // 设置键盘释放事件
-                ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
-                SendInput(1, &ip, sizeof(INPUT));
-            }
-            return;
-        }
-        if( cmd == "KeybordReleaseSync" )
-        {
-            int key  = msg["data"]["Key"].get<int>();
-            if(MouseKeyboardManager::Instance().isOpen())
-            {
-                MouseKeyboardManager::Instance().keyRelease(key);
-            }
-            else
-            {
-
-                INPUT ip;
-                ip.type = INPUT_KEYBOARD;
-                ip.ki.wVk = key; // 'A' 的虚拟键码
-
-                // 设置键盘释放事件
-                ip.ki.dwFlags = KEYEVENTF_KEYUP; // 键释放标志
-                SendInput(1, &ip, sizeof(INPUT));
-            }
-
-            return;
-        }
-        if( cmd == "MousewheelSync" )
-        {
-            int dis  = msg["data"]["dis"].get<int>();
-            INPUT input;
-            input.type = INPUT_MOUSE;
-            input.mi.dwFlags = MOUSEEVENTF_WHEEL;
-            input.mi.mouseData = dis;  // 正数向上滚动，负数向下滚动
-
-            SendInput(1, &input, sizeof(INPUT));
-            return;
+            clientRecHash[cmd](msg);
         }
     }
 }
@@ -386,5 +401,10 @@ void MainWindow::on_dungeonPushButton_clicked()
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
     }
+}
+
+void MainWindow::receiveLog(const QString &str)
+{
+    ui->textEdit->append(str);
 }
 

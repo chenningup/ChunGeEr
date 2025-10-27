@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QThread>
 #include "nlohmann/json.hpp"
-#include "safepacket.h"
+#include "../Commons/safepacket.h"
 #include <QMutex>
 #include <QSemaphore>
 extern "C" {

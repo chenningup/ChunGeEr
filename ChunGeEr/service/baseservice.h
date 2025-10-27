@@ -3,7 +3,7 @@
 
 #include <QThread>
 #include "screencapturemanager.h"
-#include "../wsmanager.h"
+#include "../WsManager/wsmanager.h"
 #include <QMutex>
 class BaseService : public QThread
 {

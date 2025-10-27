@@ -1,6 +1,6 @@
 #include "baseservice.h"
-#include "../keyboardlistener.h"
-#include "../mousekeyboardmanager.h"
+#include "../KeyboardListener/keyboardlistener.h"
+#include "../LeoControl/mousekeyboardmanager.h"
 BaseService::BaseService(QObject *parent)
     : QThread{parent},toRun(false)
 {

@@ -15,7 +15,7 @@ extern "C" {
 #include <libavutil/opt.h>
 }
 #include "screencapturemanager.h"
-#include "safepacket.h"
+#include "../Commons/safepacket.h"
 class EncodingManager : public QThread
 {
     Q_OBJECT

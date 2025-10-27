@@ -5,7 +5,7 @@
 #include <QDebug>
 #include "hv/WebSocketClient.h"
 #include "hv/WebSocketServer.h"
-
+#include "../signalslotconnector.h"
 static WebSocketService ws;
 static websocket_server_t server;
 static hv::WebSocketClient wsClient;
@@ -41,7 +41,7 @@ void WsManager::init()
             return;
         }
         json data = json::parse(msg);
-        qDebug()<<QString::fromStdString(msg);
+        emit SignalSlotConnector::Instance().log("receive: "+ QString::fromStdString(msg));
     };
 
     ws.onclose = [this](const WebSocketChannelPtr &channel) {
@@ -69,6 +69,7 @@ void WsManager::init()
         }
         json msgData= json::parse(msg);
         emit clientRecMeg(msgData);
+        emit SignalSlotConnector::Instance().log("receive: "+ QString::fromStdString(msg));
         // json data = json::parse(msg);
         // qDebug()<<QString::fromStdString(msg);
     };
@@ -111,11 +112,13 @@ void WsManager::sendMsgToClient(const std::string &msg)
 {
     for (auto &client : clientList)
     {
+        emit SignalSlotConnector::Instance().log("send: "+QString::fromStdString(msg));
         client->send(msg.c_str());
     }
 }
 
 void WsManager::sendMsgToServer(const std::string &msg)
 {
+    emit SignalSlotConnector::Instance().log("send: "+QString::fromStdString(msg));
     wsClient.send(msg.c_str());
 }

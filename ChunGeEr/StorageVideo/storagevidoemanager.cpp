@@ -1,6 +1,6 @@
 #include "storagevidoemanager.h"
 #include <QDebug>
-#include "encodingmanager.h"
+#include "../Encode/encodingmanager.h"
 StorageVidoeManager::StorageVidoeManager(QObject *parent)
     : QThread{parent},isSaving(false)
 {

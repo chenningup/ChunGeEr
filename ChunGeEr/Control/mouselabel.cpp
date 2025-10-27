@@ -1,9 +1,9 @@
 #include "mouselabel.h"
-#include "../wsmanager.h"
-#include "../screenshare.h"
-#include"../keyboardlistener.h"
+#include "../WsManager/wsmanager.h"
+#include "../ScreenShare/screenshare.h"
+#include"../KeyboardListener/keyboardlistener.h"
 #include <QGuiApplication>
-#include "../mousekeyboardmanager.h"
+#include "../LeoControl//mousekeyboardmanager.h"
 extern bool isMaster;
 MouseLabel::MouseLabel(QWidget *parent)
     : QLabel(parent)

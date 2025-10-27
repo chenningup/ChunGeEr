@@ -81,21 +81,21 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(ChunGeEr
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        storagevidoemanager.cpp storagevidoemanager.h
-        mousekeyboardmanager.h mousekeyboardmanager.cpp
-        keyboardlistener.h keyboardlistener.cpp
         service/baseservice.h service/baseservice.cpp
         service/dungeon/dungeonservice.h service/dungeon/dungeonservice.cpp
-        wsmanager.h wsmanager.cpp
-        encodingmanager.h encodingmanager.cpp
-        safepacket.h safepacket.cpp
-        screenshare.h screenshare.cpp
         Detector/detectormanager.h Detector/detectormanager.cpp
         service/CatchMonsters/catchmonstersservice.h service/CatchMonsters/catchmonstersservice.cpp
         Ocr/ocrmnager.h Ocr/ocrmnager.cpp
         Control/mouselabel.h Control/mouselabel.cpp
         Ui/screensharewidget.h Ui/screensharewidget.cpp Ui/screensharewidget.ui
-
+        Commons/safepacket.cpp Commons/safepacket.h
+        KeyboardListener/keyboardlistener.cpp KeyboardListener/keyboardlistener.h
+        StorageVideo/storagevidoemanager.cpp StorageVideo/StorageVidoeManager.h
+        WsManager/wsmanager.cpp WsManager/wsmanager.h
+        ScreenShare/screenshare.cpp ScreenShare/screenshare.h
+        LeoControl/mousekeyboardmanager.cpp LeoControl/mousekeyboardmanager.h
+        Encode/encodingmanager.cpp Encode/encodingmanager.h
+        signalslotconnector.h signalslotconnector.cpp
     )
 target_include_directories(ChunGeEr PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

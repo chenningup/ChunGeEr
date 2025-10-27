@@ -157,6 +157,24 @@ void ClientDungeonService::run()
         }
         if(task == "FollowSup")
         {
+            chooseLeftGame();
+            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 50,192);
+            QThread::msleep(500);
+            MouseKeyboardManager::Instance().mouseRightClick();
+            QThread::msleep(500);
+            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 61,192 + 55 + 50);
+            QThread::msleep(500);
+            MouseKeyboardManager::Instance().mouseClick();
+
+            chooseRightGame();
+
+            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 50,192);
+            QThread::msleep(500);
+            MouseKeyboardManager::Instance().mouseRightClick();
+            QThread::msleep(500);
+            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 61,192 + 55 + 50);
+            QThread::msleep(500);
+            MouseKeyboardManager::Instance().mouseClick();
             qDebug()<<"FollowSup";
         }
         emit SignalSlotConnector::Instance().log("finish do task" + task);

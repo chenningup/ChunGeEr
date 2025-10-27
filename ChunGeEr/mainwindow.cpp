@@ -7,6 +7,7 @@
 #include "./WsManager/wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
 #include "service/CatchMonsters/catchmonstersservice.h"
+#include "service/Record/record.h"
 #include "./KeyboardListener/keyboardlistener.h"
 #include "./Encode/encodingmanager.h"
 #include "./StorageVideo/StorageVidoeManager.h"
@@ -299,8 +300,11 @@ void MainWindow::on_testButton_clicked()
     //    serivce->startService();
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
-    CatchMonstersService *service = new CatchMonstersService();
-    service->startService();
+//    CatchMonstersService *service = new CatchMonstersService();
+//    service->startService();
+    Record *rec = new Record();
+    rec->startService();
+    ScreenCaptureManager::Instance().startCapture();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)

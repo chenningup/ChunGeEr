@@ -11,7 +11,6 @@ CatchMonstersService::CatchMonstersService(QObject *parent):BaseService(parent)
 int index = 51;
 void CatchMonstersService::run()
 {
-
     cv::namedWindow("Live", cv::WINDOW_AUTOSIZE);
     cv::namedWindow("identify", cv::WINDOW_AUTOSIZE);
     while(toRun)
@@ -90,7 +89,6 @@ void CatchMonstersService::run()
 
             delete [] buffer;
         }
-        //QThread::msleep(10);
     }
 }
 

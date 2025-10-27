@@ -65,7 +65,10 @@ void ScreenShare::init()
     // client 端的回调（通常 onopen/onmessage/onclose 的签名不同，按 hv 的定义写）
     ScreenShareWsClient.onopen = [this]()
     {
-
+        if(isShare)
+        {
+            connect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen,Qt::QueuedConnection);
+        }
     };
 
     ScreenShareWsClient.onmessage = [this](const std::string &msg)
@@ -82,6 +85,10 @@ void ScreenShare::init()
 
     ScreenShareWsClient.onclose = [this]()
     {
+        if(isShare)
+        {
+            disconnect(&EncodingManager::Instance(),&EncodingManager::encodedAVPacket,this,&ScreenShare::receiveCaptureScreen);
+        }
     };
 
     if(isMaster)

@@ -23,6 +23,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , screenShareUi(new ScreenShareWidget)
+    , mService(nullptr)
 {
     ui->setupUi(this);
     qRegisterMetaType<ScreenCaptureManager::ScreenData>("ScreenData");

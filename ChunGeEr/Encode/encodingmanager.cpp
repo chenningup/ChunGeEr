@@ -141,7 +141,10 @@ void EncodingManager::run()
 void EncodingManager::startEncodeing()
 {
     isEncoding = true;
-    start();
+    if(!isRunning())
+    {
+        start();
+    }
 }
 
 void EncodingManager::stopEncodeing()

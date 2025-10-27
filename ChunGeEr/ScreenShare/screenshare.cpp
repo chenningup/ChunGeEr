@@ -8,6 +8,7 @@
 #include "../Encode/encodingmanager.h"
 #include <QImage>
 #include "Detector/detectormanager.h"
+#include "../signalslotconnector.h"
 static WebSocketService ScreenShareWs;
 static websocket_server_t ScreenShareServer;
 static hv::WebSocketClient ScreenShareWsClient;
@@ -34,6 +35,7 @@ void ScreenShare::init()
         // 转发到类成员
         qDebug()<<"connect";
         clientList.push_back(channel);
+        emit SignalSlotConnector::Instance().log("ws client connected");
     };
 
     ScreenShareWs.onmessage = [this](const WebSocketChannelPtr &channel, const std::string &msg) {
@@ -58,6 +60,7 @@ void ScreenShare::init()
                 break;
             }
         }
+        emit SignalSlotConnector::Instance().log("ws client close");
     };
     // client 端的回调（通常 onopen/onmessage/onclose 的签名不同，按 hv 的定义写）
     ScreenShareWsClient.onopen = [this]()
@@ -245,7 +248,10 @@ void ScreenShare::startShare()
     if(isMaster)
     {
         //websocket_server_run(&ScreenShareServer, 0);
-        start();
+        if(!isRunning())
+        {
+            start();
+        }
     }
     else
     {

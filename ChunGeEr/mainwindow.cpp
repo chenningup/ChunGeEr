@@ -60,6 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
         QString url = "ws://"+serverIp+":7777";
         WsManager::Instance().startClient(url);
         ui->screenShareButton->hide();
+        ui->dungeonPushButton->hide();
     }
     // 3. 打印读取的值
     qDebug() << "AppName:" << Type;
@@ -346,8 +347,22 @@ void MainWindow::on_screenShareButton_clicked()
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
         screenShareUi->setWindowFlags(Qt::Window);
-        screenShareUi->showNormal();
-        //screenShareUi->showFullScreen();
+        screenShareUi->setWindowFlags(Qt::FramelessWindowHint);
+
+        QScreen *primaryScreen = QGuiApplication::primaryScreen();
+        if (primaryScreen)
+        {
+            if(screenShareUi->width() == primaryScreen->size().width() &&
+                screenShareUi->height() == primaryScreen->size().height())
+            {
+                screenShareUi->showFullScreen();
+            }
+            else
+            {
+                screenShareUi->showNormal();
+            }
+        }
+        //
     }
     else if (clickedButton->text() == "结束")
     {

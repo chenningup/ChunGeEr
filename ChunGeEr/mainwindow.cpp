@@ -121,10 +121,14 @@ void MainWindow::HandelClientRecStartService(const json &msg)
     std::string serviceName = msg["data"]["ServiceName"].get<std::string>();
     if(serviceName == "DungeonService")
     {
-        std::shared_ptr<ClientDungeonService>service = std::make_shared<ClientDungeonService>();
+        if(mService)
+        {
+            mService->stopService();
+            mService->deleteLater();
+        }
+        ClientDungeonService *service = new ClientDungeonService();
         service->startService();
-        mLastService = mService;
-        mService = service;
+        mService = mService;
     }
 }
 
@@ -375,9 +379,9 @@ void MainWindow::on_dungeonPushButton_clicked()
         if(mService)
         {
             mService->stopService();
-            mLastService = mService;
+            mService->deleteLater();
         }
-        std::shared_ptr<ServerDungeonService>serivce = std::make_shared<ServerDungeonService>();
+        ServerDungeonService *serivce = new ServerDungeonService() ;
         serivce->startService();
         mService = serivce;
     }

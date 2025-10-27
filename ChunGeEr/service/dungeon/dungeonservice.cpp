@@ -4,7 +4,7 @@
 #include "../../WsManager/wsmanager.h"
 #include <QDebug>
 #include "../../LeoControl//mousekeyboardmanager.h"
-
+#include "../signalslotconnector.h"
 //{
 //    "cmd": "KeyboardSync",
 //    "data": {
@@ -116,6 +116,7 @@ void ClientDungeonService::run()
             tasks.pop_front();
         }
         taskMutex.unlock();
+        emit SignalSlotConnector::Instance().log("start do task" + task);
         if(task == "PickUp")
         {
             qDebug()<<"PickUp";
@@ -158,6 +159,7 @@ void ClientDungeonService::run()
         {
             qDebug()<<"FollowSup";
         }
+        emit SignalSlotConnector::Instance().log("finish do task" + task);
     }
 }
 

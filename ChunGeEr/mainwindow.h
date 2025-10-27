@@ -45,8 +45,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     ScreenShareWidget *screenShareUi;
-    std::shared_ptr<BaseService>mService;
-    std::shared_ptr<BaseService>mLastService;
+    BaseService *mService;
     QHash<QString,HandelClientRecMegFun>clientRecHash;
 };
 #endif // MAINWINDOW_H

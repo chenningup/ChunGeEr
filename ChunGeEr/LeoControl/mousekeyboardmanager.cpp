@@ -87,8 +87,8 @@ void MouseKeyboardManager::init()
     serial.setDataBits(QSerialPort::Data8);
     serial.setParity(QSerialPort::NoParity);
     serial.setStopBits(QSerialPort::OneStop);
-    serial.setFlowControl(QSerialPort::NoFlowControl);
-
+    //serial.setFlowControl(QSerialPort::NoFlowControl);
+    serial.setFlowControl(QSerialPort::HardwareControl);
     // 4. 尝试打开串口
     if (serial.open(QIODevice::ReadWrite))
     {
@@ -107,6 +107,9 @@ void MouseKeyboardManager::init()
             QByteArray data = serial.readAll();
             qDebug() << "接收到数据:" << data;
         }
+    });
+    QObject::connect(&serial, &QSerialPort::bytesWritten, [](qint64 bytes){
+        qDebug() << "Actually written:" << bytes;
     });
     timer.start(1);
 }

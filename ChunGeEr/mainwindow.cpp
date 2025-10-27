@@ -380,12 +380,6 @@ void MainWindow::on_dungeonPushButton_clicked()
         std::shared_ptr<ServerDungeonService>serivce = std::make_shared<ServerDungeonService>();
         serivce->startService();
         mService = serivce;
-        json cmd ;
-        cmd["cmd"] = "StartService";
-        json data;
-        data["ServiceName"] = "DungeonService";
-        cmd["data"] = data;
-        WsManager::Instance().sendMsgToClient(cmd.dump());
     }
     else if (clickedButton->text() == "结束")
     {
@@ -394,12 +388,6 @@ void MainWindow::on_dungeonPushButton_clicked()
         {
             mService->stopService();
         }
-        json cmd ;
-        cmd["cmd"] = "StopService";
-        json data;
-        data["ServiceName"] = "DungeonService";
-        cmd["data"] = data;
-        WsManager::Instance().sendMsgToClient(cmd.dump());
     }
 }
 

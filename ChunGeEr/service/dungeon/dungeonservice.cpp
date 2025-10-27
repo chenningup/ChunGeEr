@@ -46,6 +46,13 @@ void ServerDungeonService::startService()
 void ServerDungeonService::stopService()
 {
     Keyboardlistener::Instance().stopListen();
+    json cmd ;
+    cmd["cmd"] = "StopService";
+    json data;
+    data["ServiceName"] = "DungeonService";
+    data["DungeonName"] = 30;
+    cmd["data"] = data;
+    WsManager::Instance().sendMsgToClient(cmd.dump());
 }
 
 void ServerDungeonService::handlePressEvent(int vkCode)

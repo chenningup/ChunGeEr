@@ -42,6 +42,7 @@ MainWindow::MainWindow(QWidget *parent)
     OcrMnager::Instance().init();
     init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
+    connect(&WsManager::Instance(),&WsManager::serverRecMeg,this,&MainWindow::serverRecMegSlot,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::clientConnectToServer,this,&MainWindow::clientConnectToServer,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::clientDisConnectToServer,this,&MainWindow::clientDisConnectToServer,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::ServerRecClientConnect,this,&MainWindow::ServerRecClientConnect,Qt::QueuedConnection);
@@ -312,6 +313,20 @@ void MainWindow::clientRecMegSlot(const json &msg)
     }
 }
 
+void MainWindow::serverRecMegSlot(const json &msg)
+{
+    if(msg.contains("cmd"))
+    {
+        QString cmd = QString::fromStdString(msg["cmd"].get<std::string>());
+        if(cmd = "ClientScreenAnys")
+        {
+            int width = msg["data"]["width"].get<int>();
+            int height = msg["data"]["height"].get<int>();
+            screenShareUi->setGeometry(0,0,width,height);
+        }
+    }
+}
+
 
 void MainWindow::on_screenShareButton_clicked()
 {
@@ -330,7 +345,8 @@ void MainWindow::on_screenShareButton_clicked()
         cmd["data"] = data;
         WsManager::Instance().sendMsgToClient(cmd.dump());
         screenShareUi->setWindowFlags(Qt::Window);
-        screenShareUi->showFullScreen();
+        screenShareUi->showNormal();
+        //screenShareUi->showFullScreen();
     }
     else if (clickedButton->text() == "结束")
     {
@@ -350,7 +366,21 @@ void MainWindow::on_screenShareButton_clicked()
 
 void MainWindow::clientConnectToServer()
 {
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    if (primaryScreen)
+    {
+        qDebug() << "主屏幕分辨率:"
+                 << primaryScreen->size().width() << "x"
+                 << primaryScreen->size().height();
+    }
     ui->statuslabel->setText("已连接");
+    json cmd ;
+    cmd["cmd"] = "ClientScreenAnys";
+    json data;
+    data["width"] = primaryScreen->size().width();
+    data["height"] = primaryScreen->size().height();
+    cmd["data"] = data;
+    WsManager::Instance().sendMsgToServer(cmd.dump());
 }
 
 void MainWindow::clientDisConnectToServer()

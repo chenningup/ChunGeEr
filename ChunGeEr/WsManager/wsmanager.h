@@ -35,6 +35,7 @@ signals:
     void ServerRecClientConnect(QString ip);
     void ServerRecClientDisConnect(QString ip);
     void clientRecMeg(const json &msg);
+    void serverRecMeg(const json &msg);
 private:
 
 };

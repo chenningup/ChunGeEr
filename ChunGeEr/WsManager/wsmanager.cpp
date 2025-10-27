@@ -41,6 +41,7 @@ void WsManager::init()
             return;
         }
         json data = json::parse(msg);
+        emit serverRecMeg(data);
         emit SignalSlotConnector::Instance().log("receive: "+ QString::fromStdString(msg));
     };
 

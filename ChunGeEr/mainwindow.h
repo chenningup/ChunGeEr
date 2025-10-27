@@ -33,6 +33,7 @@ private slots:
 
     void on_testButton_clicked();
     void clientRecMegSlot(const json &msg);
+    void serverRecMegSlot(const json &msg);
     void on_screenShareButton_clicked();
 
     void clientConnectToServer();

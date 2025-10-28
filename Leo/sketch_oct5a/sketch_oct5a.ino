@@ -59,12 +59,12 @@ void loop() {
   if (Serial.available() > 0) {
     int inChar1  = Serial.read();
     uint8_t inChar = (uint8_t)inChar1;
-    Serial.println("current char ");
-    Serial.println(inChar,HEX);
-    Serial.println("current pr ");
-    Serial.println(pr);
-    Serial.println("current status ");
-    Serial.println(status);
+    // Serial.println("current char ");
+    // Serial.println(inChar,HEX);
+    // Serial.println("current pr ");
+    // Serial.println(pr);
+    // Serial.println("current status ");
+    // Serial.println(status);
         switch(status)
         {
         case findHeadFirtst:
@@ -190,9 +190,9 @@ void loop() {
                             memcpy(&y, &buffer[9], 4);
                             //Mouse.move(x, y, 0);
                              Mouse.move((int8_t)x, (int8_t)y, 0); // 修正关键点
-                             Serial.println("X raw="); Serial.println(x);
-                             Serial.println("Y raw="); Serial.println(y);
-                             delay(2);
+                             //Serial.println("X raw="); Serial.println(x);
+                             //Serial.println("Y raw="); Serial.println(y);
+                            // delay(2);
                         }
                         else if(type == 2)
                         {

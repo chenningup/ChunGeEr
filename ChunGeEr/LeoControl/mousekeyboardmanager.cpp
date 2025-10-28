@@ -7,6 +7,7 @@
 #include <random>
 #include <windows.h>
 #include <cmath>
+#include <QDateTime>
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "imm32.lib")
 static QHash<int,int>keyHash ={
@@ -113,6 +114,7 @@ void MouseKeyboardManager::init()
         qDebug() << "Actually written:" << bytes;
     });
     // timer.start(50);
+    isStart = true;
     start();
 }
 
@@ -259,6 +261,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     memcpy(&data[2],&x,sizeof(int));
     memcpy(&data[6],&y,sizeof(int));
     createPacket((char*)tmp,data,10);
+    qDebug() <<"moveMouse write";
     serial.write((const char *)tmp,10 + 3 + 4);
     serial.flush();
     serial.waitForBytesWritten();
@@ -298,17 +301,20 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
         tmpy+=movey;
         moveMouse(movex,movey);
         int index = 0;
+        QDateTime cur = QDateTime::currentDateTime();
         while (QCursor::pos().x() != tmpx || QCursor::pos().y() != tmpy)
         {
             QThread::msleep(1);
             index++;
             if(index >= 500)
             {
+                qDebug()<<"tmp mouseMoveDirect timeout";
                 return;
             }
         }
         current = QCursor::pos();
-       // qDebug()<<"tmp mouseMoveDirect :" << movex << movey <<"cur x,y:"<<current.x() << current.y();
+        QDateTime end = QDateTime::currentDateTime();
+        qDebug()<<"tmp mouseMoveDirect cost:" << end.msecsTo(cur);
 
     }
     current = QCursor::pos();

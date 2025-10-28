@@ -98,7 +98,7 @@ void MouseKeyboardManager::init()
     {
         qDebug() << "打开串口失败：" << serial.errorString();
     }
-    connect(&serial,&QSerialPort::readyRead,[=](){
+    connect(&serial,&QSerialPort::readyRead,[&](){
         QByteArray Read_Buf=serial.readAll();
         qDebug()<<Read_Buf;
     });
@@ -111,7 +111,7 @@ void MouseKeyboardManager::init()
     QObject::connect(&serial, &QSerialPort::bytesWritten, [](qint64 bytes){
         qDebug() << "Actually written:" << bytes;
     });
-    timer.start(1);
+   // timer.start(50);
 }
 
 bool MouseKeyboardManager::isOpen()
@@ -199,8 +199,8 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     memcpy(&data[6],&y,sizeof(int));
     createPacket((char*)tmp,data,10);
     serial.write((const char *)tmp,10 + 3 + 4);
-    serial.flush();
-    serial.waitForBytesWritten();
+    //serial.flush();
+    //serial.waitForBytesWritten();
     qDebug() <<"moveMouse leave";
 }
 
@@ -263,8 +263,8 @@ void MouseKeyboardManager::mousePress(int type)
     array.push_back(type == MOUSE_LEFT ? 5 : 6);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    //serial.flush();
+    //serial.waitForBytesWritten();
 }
 
 void MouseKeyboardManager::mouseRelease(int type)
@@ -275,8 +275,8 @@ void MouseKeyboardManager::mouseRelease(int type)
     array.push_back(type == MOUSE_LEFT ? 7 : 8);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    //serial.flush();
+    //serial.waitForBytesWritten();
 }
 
 void MouseKeyboardManager::keyPress(int key)
@@ -308,8 +308,8 @@ void MouseKeyboardManager::keyPress(int key)
     array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    //serial.flush();
+    //serial.waitForBytesWritten();
 
 }
 
@@ -332,8 +332,8 @@ void MouseKeyboardManager::keyRelease(int key)
     array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    //serial.flush();
+    //serial.waitForBytesWritten();
 }
 
 int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)

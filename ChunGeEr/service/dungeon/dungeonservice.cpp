@@ -117,6 +117,12 @@ void ClientDungeonService::run()
         }
         taskMutex.unlock();
         emit SignalSlotConnector::Instance().log("start do task" + task);
+        MouseKeyboardManager::Instance().startSoleOperate();
+        if(!MouseKeyboardManager::Instance().waitForSoleOperate())
+        {
+            QThread::msleep(1);
+            continue;
+        }
         if(task == "PickUp")
         {
             qDebug()<<"PickUp";
@@ -199,6 +205,7 @@ void ClientDungeonService::run()
             MouseKeyboardManager::Instance().mouseClick();
             qDebug()<<"FollowSup";
         }
+        MouseKeyboardManager::Instance().stopSoleOperate();
         emit SignalSlotConnector::Instance().log("finish do task" + task);
     }
 }

@@ -42,12 +42,13 @@ int getRandomInRange(int min, int max) {
     return distrib(gen);
 }
 MouseKeyboardManager::MouseKeyboardManager(QObject *parent)
-    : QObject{parent}
+    : QThread{parent}
 {}
 
 MouseKeyboardManager::~MouseKeyboardManager()
 {
     serial.close();
+    isStart = false;
 }
 
 MouseKeyboardManager &MouseKeyboardManager::Instance()
@@ -111,7 +112,67 @@ void MouseKeyboardManager::init()
     QObject::connect(&serial, &QSerialPort::bytesWritten, [](qint64 bytes){
         qDebug() << "Actually written:" << bytes;
     });
-   // timer.start(50);
+    // timer.start(50);
+    start();
+}
+
+void MouseKeyboardManager::run()
+{
+    while (isStart)
+    {
+        taskSem.acquire();
+        taskMutex.lock();
+        if(taskList.isEmpty())
+        {
+            taskMutex.unlock();
+            continue;
+        }
+        LeoTask task = taskList[0];
+        taskList.pop_front();
+        taskMutex.unlock();
+        if(task.task == "MouseMoveSync")
+        {
+            mouseMoveDirect(task.x,task.y);
+        }
+        if(task.task == "MousePressSync")
+        {
+            mousePress(task.mouseType);
+        }
+        if(task.task == "MouseReleaseSync")
+        {
+            mouseRelease(task.mouseType);
+        }
+        if(task.task == "KeybordPressSync")
+        {
+            keyPress(task.key);
+        }
+        if(task.task == "KeybordReleaseSync")
+        {
+            keyRelease(task.key);
+        }
+    }
+}
+
+void MouseKeyboardManager::pushbackTask(const LeoTask &task)
+{
+    if(isSoleOperate)
+    {
+        return;
+    }
+    taskMutex.lock();
+    taskList.push_back(task);
+    taskMutex.unlock();
+    taskSem.release();
+}
+
+void MouseKeyboardManager::startSoleOperate()
+{
+    isSoleOperate = true;
+}
+
+bool MouseKeyboardManager::waitForSoleOperate()
+{
+    return taskList.isEmpty();
 }
 
 bool MouseKeyboardManager::isOpen()
@@ -199,8 +260,8 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     memcpy(&data[6],&y,sizeof(int));
     createPacket((char*)tmp,data,10);
     serial.write((const char *)tmp,10 + 3 + 4);
-    //serial.flush();
-    //serial.waitForBytesWritten();
+    serial.flush();
+    serial.waitForBytesWritten();
     qDebug() <<"moveMouse leave";
 }
 
@@ -241,9 +302,9 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
         {
             QThread::msleep(1);
             index++;
-            if(index >=1000)
+            if(index >= 500)
             {
-                break;
+                return;
             }
         }
         current = QCursor::pos();
@@ -263,8 +324,8 @@ void MouseKeyboardManager::mousePress(int type)
     array.push_back(type == MOUSE_LEFT ? 5 : 6);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    //serial.flush();
-    //serial.waitForBytesWritten();
+    serial.flush();
+    serial.waitForBytesWritten();
 }
 
 void MouseKeyboardManager::mouseRelease(int type)
@@ -275,8 +336,8 @@ void MouseKeyboardManager::mouseRelease(int type)
     array.push_back(type == MOUSE_LEFT ? 7 : 8);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    //serial.flush();
-    //serial.waitForBytesWritten();
+    serial.flush();
+    serial.waitForBytesWritten();
 }
 
 void MouseKeyboardManager::keyPress(int key)
@@ -308,8 +369,8 @@ void MouseKeyboardManager::keyPress(int key)
     array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    //serial.flush();
-    //serial.waitForBytesWritten();
+    serial.flush();
+    serial.waitForBytesWritten();
 
 }
 
@@ -332,8 +393,8 @@ void MouseKeyboardManager::keyRelease(int key)
     array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
     serial.write((const char *)tmp,size);
-    //serial.flush();
-    //serial.waitForBytesWritten();
+    serial.flush();
+    serial.waitForBytesWritten();
 }
 
 int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)

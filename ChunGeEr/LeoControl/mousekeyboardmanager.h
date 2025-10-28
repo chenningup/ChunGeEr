@@ -6,6 +6,9 @@
 #include <random>
 #include <cmath>
 #include <QTimer>
+#include <QMutex>
+#include <QSemaphore>
+#include <QThread>
 #define KEY_LEFT_CTRL     0x80
 #define KEY_LEFT_SHIFT    0x81
 #define KEY_LEFT_ALT      0x82
@@ -84,7 +87,17 @@
 
 #define MOUSE_LEFT 1
 #define MOUSE_RIGHT 2
-class MouseKeyboardManager : public QObject
+
+struct LeoTask
+{
+    QString task;
+    int x;
+    int y;
+    int mouseType;
+    int key;
+};
+
+class MouseKeyboardManager : public QThread
 {
     Q_OBJECT
 public:
@@ -93,6 +106,14 @@ public:
     static MouseKeyboardManager&Instance();
 
     void init();
+
+    void run();
+
+    void pushbackTask(const LeoTask&task);
+
+    void startSoleOperate();
+    bool waitForSoleOperate();
+    void stopSoleOperate(){isSoleOperate = false;};
 
     bool isOpen();
 
@@ -116,10 +137,15 @@ private:
     int createPacket(char * dist,char * data,int datasize);
 private:
     QSerialPort serial;
-
+    bool isStart = false;
     std::mt19937 rng;
     std::uniform_real_distribution<double> dist;
-     QTimer timer;
+    QTimer timer;
+
+    bool isSoleOperate = false;
+    QMutex taskMutex;
+    QSemaphore taskSem;
+    QList<LeoTask>taskList;
 };
 
 #endif // MOUSEKEYBOARDMANAGER_H

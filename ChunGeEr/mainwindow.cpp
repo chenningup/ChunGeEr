@@ -160,7 +160,12 @@ void MainWindow::HandelClientRecMouseMoveSync(const json &msg)
     int y = msg["data"]["y"].get<int>();
     if(MouseKeyboardManager::Instance().isOpen())
     {
-        MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+        LeoTask task ;
+        task.x = x;
+        task.y = y;
+        task.task = "MouseMoveSync";
+        MouseKeyboardManager::Instance().pushbackTask(task);
+       // MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
     }
     else
     {
@@ -174,16 +179,29 @@ void MainWindow::HandelClientRecMousePressSync(const json &msg)
     int y = msg["data"]["y"].get<int>();
     if(MouseKeyboardManager::Instance().isOpen())
     {
-        MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+        LeoTask task ;
+        task.x = x;
+        task.y = y;
+        task.task = "MouseMoveSync";
+        MouseKeyboardManager::Instance().pushbackTask(task);
+        //MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
         std::string type = msg["data"]["type"].get<std::string>();
+
+        LeoTask task1 ;
+        task1.x = x;
+        task1.y = y;
+        task1.task = "MousePressSync";
         if(type == "left")
         {
-            MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
+            task1.mouseType  = MOUSE_LEFT;
+            //MouseKeyboardManager::Instance().mousePress(MOUSE_LEFT);
         }
         else
         {
-            MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
+            task1.mouseType  = MOUSE_RIGHT;
+            //MouseKeyboardManager::Instance().mousePress(MOUSE_RIGHT);
         }
+        MouseKeyboardManager::Instance().pushbackTask(task1);
     }
     else
     {
@@ -211,16 +229,24 @@ void MainWindow::HandelClientRecMouseReleaseSync(const json &msg)
     int y = msg["data"]["y"].get<int>();
     if(MouseKeyboardManager::Instance().isOpen())
     {
-        MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
+        LeoTask task ;
+        task.x = x;
+        task.y = y;
+        task.task = "MouseMoveSync";
+        MouseKeyboardManager::Instance().pushbackTask(task);
+        //MouseKeyboardManager::Instance().mouseMoveDirect(x,y);
         std::string type = msg["data"]["type"].get<std::string>();
+        LeoTask task1 ;
+        task1.task = "MouseReleaseSync";
         if(type == "left")
         {
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_LEFT);
+            task1.mouseType  = MOUSE_LEFT;
         }
         else
         {
-            MouseKeyboardManager::Instance().mouseRelease(MOUSE_RIGHT);
+            task1.mouseType  = MOUSE_RIGHT;
         }
+        MouseKeyboardManager::Instance().pushbackTask(task1);
     }
     else
     {
@@ -247,7 +273,11 @@ void MainWindow::HandelClientRecKeybordPressSync(const json &msg)
     int key  = msg["data"]["Key"].get<int>();
     if(MouseKeyboardManager::Instance().isOpen())
     {
-        MouseKeyboardManager::Instance().keyPress(key);
+        LeoTask task ;
+        task.task = "KeybordPressSync";
+        task.key = key;
+        MouseKeyboardManager::Instance().pushbackTask(task);
+        //MouseKeyboardManager::Instance().keyPress(key);
     }
     else
     {
@@ -268,7 +298,11 @@ void MainWindow::HandelClientRecKeybordReleaseSync(const json &msg)
     int key  = msg["data"]["Key"].get<int>();
     if(MouseKeyboardManager::Instance().isOpen())
     {
-        MouseKeyboardManager::Instance().keyRelease(key);
+        //MouseKeyboardManager::Instance().keyRelease(key);
+        LeoTask task ;
+        task.task = "KeybordReleaseSync";
+        task.key = key;
+        MouseKeyboardManager::Instance().pushbackTask(task);
     }
     else
     {

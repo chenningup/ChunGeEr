@@ -171,7 +171,10 @@ void ScreenCaptureManager::run()
 void ScreenCaptureManager::startCapture()
 {
     isCapture = true;
-    start();
+    if(!isRunning())
+    {
+        start();
+    }
 }
 
 void ScreenCaptureManager::stopCapture()
@@ -179,6 +182,7 @@ void ScreenCaptureManager::stopCapture()
     // Cleanup
    // session.Close();
     //framePool.Close();
+
     isCapture = false;
 }
 

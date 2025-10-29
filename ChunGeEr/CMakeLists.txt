@@ -97,6 +97,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Encode/encodingmanager.cpp Encode/encodingmanager.h
         signalslotconnector.h signalslotconnector.cpp
         service/Record/record.h service/Record/record.cpp
+        Commons/Log/XuLog.cpp Commons/Log/XuLog.h
     )
 target_include_directories(ChunGeEr PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

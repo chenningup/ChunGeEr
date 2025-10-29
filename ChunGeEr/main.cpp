@@ -14,6 +14,7 @@
 #include <fstream>
 #include <random>
 #include <QDir>
+#include "Commons/Log/XuLog.h"
 using namespace cv;
 using namespace std;
 
@@ -338,6 +339,7 @@ void ClsTest()
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    XuLog::Instance()->init();
     //loop();
     //DetectTest();
     //QThread::sleep(10);

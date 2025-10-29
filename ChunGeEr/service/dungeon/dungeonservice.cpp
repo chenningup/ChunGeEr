@@ -161,25 +161,25 @@ void ClientDungeonService::run()
         {
             qDebug()<<"UseSkill";
             chooseLeftGame();
-            MouseKeyboardManager::Instance().keyPress('3');
+            MouseKeyboardManager::Instance().clickButton('3');
             QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseMoveDirect(700,400);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
             QThread::msleep(1000);
-            MouseKeyboardManager::Instance().keyPress('4');
+            MouseKeyboardManager::Instance().clickButton('4');
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
 
             chooseRightGame();
 
-            MouseKeyboardManager::Instance().keyPress('3');
+            MouseKeyboardManager::Instance().clickButton('3');
             QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseMoveDirect(1920 - 1400 + 700 ,400);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
             QThread::msleep(1000);
-            MouseKeyboardManager::Instance().keyPress('4');
+            MouseKeyboardManager::Instance().clickButton('4');
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
         }

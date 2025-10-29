@@ -272,8 +272,9 @@ void MouseKeyboardManager::moveMouse(int x, int y)
 
 void MouseKeyboardManager::mouseMoveDirect(int x, int y)
 {
+    infof("mouseMoveDirect enter,x:{},y:{}",x,y);
+    QDateTime start = QDateTime::currentDateTime();
     QPoint current = QCursor::pos();
-    //qDebug()<<"mouseMoveDirect enter: move to:" << x << y<<"cur pos:"<<current.x()<<current.y();
     int moveXpiece = x - current.x() > 0 ? 100 : -100;
     int moveYpiece = y - current.y() > 0 ? 100 : -100;
     int tmpx = current.x();
@@ -301,27 +302,23 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
 
         tmpx+=movex;
         tmpy+=movey;
+        QPoint tmpbefor = QCursor::pos();
         moveMouse(movex,movey);
         int index = 0;
-        QDateTime cur = QDateTime::currentDateTime();
         while (QCursor::pos().x() != tmpx || QCursor::pos().y() != tmpy)
         {
             QThread::msleep(1);
             index++;
             if(index >= 500)
             {
-                qDebug()<<"tmp mouseMoveDirect timeout";
+                errorf("moveMouse movex:{},movey:{},timeout,before pos,x:{},y:{},later pos,x:{},y:{}",movex,movey,tmpbefor.x(),tmpbefor.y(),QCursor::pos().x(),QCursor::pos().y());
                 return;
             }
         }
-        current = QCursor::pos();
-        QDateTime end = QDateTime::currentDateTime();
-        qDebug()<<"tmp mouseMoveDirect cost:" << end.msecsTo(cur);
-
     }
     current = QCursor::pos();
-    //qDebug()<<"mouseMoveDirect leave" <<"cur x,y:"<<current.x() << current.y();
-
+    QDateTime end = QDateTime::currentDateTime();
+    infof("mouseMoveDirect leave,cost:{},cursor pos,x:{},y:{}",start.msecsTo(end),current.x(),current.y());
 }
 
 void MouseKeyboardManager::mousePress(int type)

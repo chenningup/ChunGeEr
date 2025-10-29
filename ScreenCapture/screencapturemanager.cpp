@@ -64,7 +64,7 @@ void ScreenCaptureManager::run()
         if(!lastTime.isValid()) lastTime = QDateTime::currentDateTime();
         else {
             QDateTime cur = QDateTime::currentDateTime();
-            if(lastTime.msecsTo(cur) < 30) return;
+            if(lastTime.msecsTo(cur) < 67) return;
             lastTime = cur;
         }
 

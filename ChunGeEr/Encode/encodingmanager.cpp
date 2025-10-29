@@ -39,8 +39,8 @@ void EncodingManager::init()
     // 配置编码器参数 [5](@ref)
     m_codecContext->width = primaryScreen->size().width();
     m_codecContext->height = primaryScreen->size().height();
-    m_codecContext->time_base = {1, 30};
-    m_codecContext->framerate = {30, 1};
+    m_codecContext->time_base = {1, 15};
+    m_codecContext->framerate = {15, 1};
     m_codecContext->pix_fmt = AV_PIX_FMT_YUV420P;
     m_codecContext->bit_rate = 1000000; // 1 Mbps
     m_codecContext->max_b_frames = 0;          // 禁用B帧，减少内部缓存

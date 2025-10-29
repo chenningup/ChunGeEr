@@ -203,7 +203,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
         return ;
     }
     QDateTime start = QDateTime::currentDateTime();
-    infof("moveMouse enter:x:{},y{}",x,y);
+    //infof("moveMouse enter:x:{},y{}",x,y);
     unsigned char tmp[100] = {0} ;
     char data[100] = {0};
     data[0] =  0x02;
@@ -214,7 +214,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     mSerialManager.sendData(QByteArray((const char *)tmp,10 + 3 + 4));
     //serial.write((const char *)tmp,10 + 3 + 4);
     QDateTime end = QDateTime::currentDateTime();
-    infof("moveMouse leave:x:{},y{},cost:{}",x,y,start.msecsTo(end));
+    //infof("moveMouse leave:x:{},y{},cost:{}",x,y,start.msecsTo(end));
 }
 
 void MouseKeyboardManager::mouseMoveDirect(int x, int y)
@@ -270,7 +270,7 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
 
 void MouseKeyboardManager::mousePress(int type)
 {
-    infof("mousePress enter,type:{}",type);
+   // infof("mousePress enter,type:{}",type);
     QDateTime start = QDateTime::currentDateTime();
     unsigned char tmp[100] = {0} ;
     QByteArray array;
@@ -282,12 +282,12 @@ void MouseKeyboardManager::mousePress(int type)
 //    serial.waitForBytesWritten();
     mSerialManager.sendData(QByteArray((const char *)tmp,size));
     QDateTime end = QDateTime::currentDateTime();
-    infof("mousePress leave cost:{}",start.msecsTo(end));
+    //infof("mousePress leave cost:{}",start.msecsTo(end));
 }
 
 void MouseKeyboardManager::mouseRelease(int type)
 {
-    infof("mouseRelease enter,type:{}",type);
+    //infof("mouseRelease enter,type:{}",type);
     QDateTime start = QDateTime::currentDateTime();
     unsigned char tmp[100] = {0} ;
     QByteArray array;
@@ -299,7 +299,7 @@ void MouseKeyboardManager::mouseRelease(int type)
 //    serial.flush();
 //    serial.waitForBytesWritten();
     QDateTime end = QDateTime::currentDateTime();
-    infof("mouseRelease leave cost:{}",start.msecsTo(end));
+    //infof("mouseRelease leave cost:{}",start.msecsTo(end));
 }
 
 void MouseKeyboardManager::keyPress(int key)
@@ -324,7 +324,7 @@ void MouseKeyboardManager::keyPress(int key)
         endkey = key+32;
     }
 
-    infof("keyPress enter,endkey:{}",endkey);
+    //infof("keyPress enter,endkey:{}",endkey);
     QDateTime start = QDateTime::currentDateTime();
     unsigned char tmp[100] = {0} ;
     QByteArray array;
@@ -337,7 +337,7 @@ void MouseKeyboardManager::keyPress(int key)
 //    serial.flush();
 //    serial.waitForBytesWritten();
     QDateTime end = QDateTime::currentDateTime();
-    infof("keyPress leave cost:{}",start.msecsTo(end));
+    //infof("keyPress leave cost:{}",start.msecsTo(end));
 }
 
 
@@ -365,7 +365,7 @@ void MouseKeyboardManager::keyRelease(int key)
 //    serial.flush();
 //    serial.waitForBytesWritten();
     QDateTime end = QDateTime::currentDateTime();
-    infof("keyRelease leave cost:{}",start.msecsTo(end));
+    //infof("keyRelease leave cost:{}",start.msecsTo(end));
 }
 
 int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)

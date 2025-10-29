@@ -58,19 +58,24 @@ void ScreenCaptureManager::run()
     bool initialized = false;
 
     std::condition_variable frameCondition;
-    static QDateTime lastTime;
-
+    lastTime = QDateTime::currentDateTime();
     framePool.FrameArrived([&](auto const& sender, auto const&) {
-        if(!lastTime.isValid()) lastTime = QDateTime::currentDateTime();
-        else {
-            QDateTime cur = QDateTime::currentDateTime();
-            if(lastTime.msecsTo(cur) < 67) return;
-            lastTime = cur;
-        }
-
         auto frame = sender.TryGetNextFrame();
         if (!frame) return;
 
+        if(!lastTime.isValid())
+        {
+            lastTime = QDateTime::currentDateTime();
+        }
+        else
+        {
+            QDateTime cur = QDateTime::currentDateTime();
+            if(lastTime.msecsTo(cur) < 67)
+            {
+                return;
+            }
+            lastTime = cur;
+        }
         try {
             auto surface = frame.Surface();
             // Get the underlying D3D11 texture using interop

@@ -9,6 +9,7 @@
 #include <QMutex>
 #include <QSemaphore>
 #include <QThread>
+#include "serialportmanager.h"
 #define KEY_LEFT_CTRL     0x80
 #define KEY_LEFT_SHIFT    0x81
 #define KEY_LEFT_ALT      0x82
@@ -136,7 +137,8 @@ signals:
 private:
     int createPacket(char * dist,char * data,int datasize);
 private:
-    QSerialPort serial;
+    //QSerialPort serial;
+    SerialPortManager mSerialManager;
     bool isStart = false;
     std::mt19937 rng;
     std::uniform_real_distribution<double> dist;

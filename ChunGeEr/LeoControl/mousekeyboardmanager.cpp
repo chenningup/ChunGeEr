@@ -49,7 +49,6 @@ MouseKeyboardManager::MouseKeyboardManager(QObject *parent)
 
 MouseKeyboardManager::~MouseKeyboardManager()
 {
-    serial.close();
     isStart = false;
 }
 
@@ -61,60 +60,8 @@ MouseKeyboardManager &MouseKeyboardManager::Instance()
 static HKL s_previousLayout;
 void MouseKeyboardManager::init()
 {
-    QList<QSerialPortInfo> ports = QSerialPortInfo::availablePorts();
-    if (ports.isEmpty()) {
-        qDebug() << "未找到任何可用串口。";
-        return;
-    }
-    qDebug() << "找到以下串口：";
-    QSerialPortInfo choosePort;
-    bool isfound = false;
-    for (const auto &port : ports)
-    {
-        if(port.description().contains("Leonardo"))
-        {
-            isfound = true;
-            choosePort = port;
-        }
-    }
-    if(!isfound)
-    {
-        return;
-    }
-    // 2. 使用第一个找到的串口（实际应用中应由用户选择或根据条件确定）
-
-    serial.setPortName(choosePort.portName());
-
-    // 3. 配置串口参数
-    serial.setBaudRate(QSerialPort::Baud9600);
-    serial.setDataBits(QSerialPort::Data8);
-    serial.setParity(QSerialPort::NoParity);
-    serial.setStopBits(QSerialPort::OneStop);
-    //serial.setFlowControl(QSerialPort::NoFlowControl);
-    serial.setFlowControl(QSerialPort::HardwareControl);
-    // 4. 尝试打开串口
-    if (serial.open(QIODevice::ReadWrite))
-    {
-        qDebug() << "串口" << serial.portName() << "打开成功！";
-    }
-    else
-    {
-        qDebug() << "打开串口失败：" << serial.errorString();
-    }
-    connect(&serial,&QSerialPort::readyRead,[&](){
-        QByteArray Read_Buf=serial.readAll();
-        qDebug()<<Read_Buf;
-    });
-    connect(&timer, &QTimer::timeout, [&]() {
-        if (serial.bytesAvailable() > 0) {
-            QByteArray data = serial.readAll();
-            qDebug() << "接收到数据:" << data;
-        }
-    });
-    QObject::connect(&serial, &QSerialPort::bytesWritten, [](qint64 bytes){
-        qDebug() << "Actually written:" << bytes;
-    });
     // timer.start(50);
+    mSerialManager.start();
     isStart = true;
     start();
 }
@@ -180,12 +127,12 @@ bool MouseKeyboardManager::waitForSoleOperate()
 
 bool MouseKeyboardManager::isOpen()
 {
-    return serial.isOpen();
+    return mSerialManager.isOpen();
 }
 
 void MouseKeyboardManager::clickButton(const QString &button)
 {
-    if(!serial.isOpen() || button.isEmpty())
+    if(!mSerialManager.isOpen() || button.isEmpty())
     {
         return;
     }
@@ -206,7 +153,8 @@ void MouseKeyboardManager::clickButton(const QString &button)
     key[5+button.size() + 2] = 0x5B;
     key[5+button.size() + 3] = 0x81;
     qDebug()<<"write";
-    serial.write((const char *)key,5+button.size() + 4);
+    mSerialManager.sendData(QByteArray((const char *)key,5+button.size() + 4));
+    //serial.write((const char *)key,5+button.size() + 4);
 }
 
 void MouseKeyboardManager::clickButton(int button)
@@ -263,9 +211,8 @@ void MouseKeyboardManager::moveMouse(int x, int y)
     memcpy(&data[2],&x,sizeof(int));
     memcpy(&data[6],&y,sizeof(int));
     createPacket((char*)tmp,data,10);
-    serial.write((const char *)tmp,10 + 3 + 4);
-    serial.flush();
-    serial.waitForBytesWritten();
+    mSerialManager.sendData(QByteArray((const char *)tmp,10 + 3 + 4));
+    //serial.write((const char *)tmp,10 + 3 + 4);
     QDateTime end = QDateTime::currentDateTime();
     infof("moveMouse leave:x:{},y{},cost:{}",x,y,start.msecsTo(end));
 }
@@ -330,9 +277,10 @@ void MouseKeyboardManager::mousePress(int type)
     array.push_back(0x02);
     array.push_back(type == MOUSE_LEFT ? 5 : 6);
     int size = createPacket((char*)tmp,array.data(),array.size());
-    serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+//    serial.write((const char *)tmp,size);
+//    serial.flush();
+//    serial.waitForBytesWritten();
+    mSerialManager.sendData(QByteArray((const char *)tmp,size));
     QDateTime end = QDateTime::currentDateTime();
     infof("mousePress leave cost:{}",start.msecsTo(end));
 }
@@ -346,9 +294,10 @@ void MouseKeyboardManager::mouseRelease(int type)
     array.push_back(0x02);
     array.push_back(type == MOUSE_LEFT ? 7 : 8);
     int size = createPacket((char*)tmp,array.data(),array.size());
-    serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    mSerialManager.sendData(QByteArray((const char *)tmp,size));
+//    serial.write((const char *)tmp,size);
+//    serial.flush();
+//    serial.waitForBytesWritten();
     QDateTime end = QDateTime::currentDateTime();
     infof("mouseRelease leave cost:{}",start.msecsTo(end));
 }
@@ -383,9 +332,10 @@ void MouseKeyboardManager::keyPress(int key)
     array.push_back(0x01);
     array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
-    serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    mSerialManager.sendData(QByteArray((const char *)tmp,size));
+//    serial.write((const char *)tmp,size);
+//    serial.flush();
+//    serial.waitForBytesWritten();
     QDateTime end = QDateTime::currentDateTime();
     infof("keyPress leave cost:{}",start.msecsTo(end));
 }
@@ -410,9 +360,10 @@ void MouseKeyboardManager::keyRelease(int key)
     array.push_back(0x02);
     array.push_back(endkey);
     int size = createPacket((char*)tmp,array.data(),array.size());
-    serial.write((const char *)tmp,size);
-    serial.flush();
-    serial.waitForBytesWritten();
+    mSerialManager.sendData(QByteArray((const char *)tmp,size));
+//    serial.write((const char *)tmp,size);
+//    serial.flush();
+//    serial.waitForBytesWritten();
     QDateTime end = QDateTime::currentDateTime();
     infof("keyRelease leave cost:{}",start.msecsTo(end));
 }
@@ -450,7 +401,8 @@ void MouseKeyboardManager::mouseDoubleClick()
     key[6] = 0x5B;
     key[7] = 0x81;
     qDebug()<<"write";
-    serial.write((const char *)key,4+ 4);
+    mSerialManager.sendData(QByteArray((const char *)key,4+ 4));
+    //serial.write((const char *)key,4+ 4);
 }
 
 void MouseKeyboardManager::mouseRightClick()

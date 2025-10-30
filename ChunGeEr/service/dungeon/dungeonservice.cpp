@@ -60,7 +60,7 @@ void ServerDungeonService::handlePressEvent(int vkCode)
     qDebug()<<"handlePressEvent"<<vkCode;
     switch(vkCode)
     {
-    case 112:
+    case 192:
     {
         json cmd ;
         cmd["cmd"] = "PickUp";
@@ -187,21 +187,21 @@ void ClientDungeonService::run()
         if(task == "FollowSup")
         {
             chooseLeftGame();
-            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 50,192);
+            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 100,192);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseRightClick();
             QThread::msleep(500);
-            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 61,192 + 55 + 50);
+            MouseKeyboardManager::Instance().mouseMoveDirect(42 + 100 + 61,192 + 55 + 50);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
 
             chooseRightGame();
 
-            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 50,192);
+            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 100,192);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseRightClick();
             QThread::msleep(500);
-            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 61,192 + 55 + 50);
+            MouseKeyboardManager::Instance().mouseMoveDirect(932 + 100 + 61,192 + 55 + 50);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
             qDebug()<<"FollowSup";

@@ -164,10 +164,10 @@ void ClientDungeonService::run()
             QThread::msleep(500);
             MouseKeyboardManager::Instance().clickButton('3');
             QThread::msleep(200);
-            MouseKeyboardManager::Instance().mouseMoveDirect(700,400);
+            MouseKeyboardManager::Instance().mouseMoveDirect(600,400);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
-            QThread::msleep(1000);
+            QThread::msleep(2000);
             MouseKeyboardManager::Instance().clickButton('4');
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
@@ -176,10 +176,10 @@ void ClientDungeonService::run()
             QThread::msleep(500);
             MouseKeyboardManager::Instance().clickButton('3');
             QThread::msleep(200);
-            MouseKeyboardManager::Instance().mouseMoveDirect(1920 - 1400 + 700 ,400);
+            MouseKeyboardManager::Instance().mouseMoveDirect(1920 - 600 ,400);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
-            QThread::msleep(1000);
+            QThread::msleep(2000);
             MouseKeyboardManager::Instance().clickButton('4');
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
@@ -228,10 +228,13 @@ void ClientDungeonService::clientHandleRecMsg(const json &data)
     if(data.contains("cmd"))
     {
         std::string cmd = data["cmd"].get<std::string>();
-        taskMutex.lock();
-        tasks.push_back(QString::fromStdString(cmd));
-        taskMutex.unlock();
-        taskSem.release();
+        if(cmd == "PickUp" || cmd == "FollowLeader" || cmd == "UseSkill" || cmd == "FollowSup")
+        {
+            taskMutex.lock();
+            tasks.push_back(QString::fromStdString(cmd));
+            taskMutex.unlock();
+            taskSem.release();
+        }
         return;
     }
 }

@@ -334,11 +334,12 @@ void MainWindow::on_testButton_clicked()
     //    serivce->startService();
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
-//    CatchMonstersService *service = new CatchMonstersService();
-//    service->startService();
-    Record *rec = new Record();
-    rec->startService();
-    ScreenCaptureManager::Instance().startCapture();
+   CatchMonstersService *service = new CatchMonstersService();
+   service->startService();
+   ScreenCaptureManager::Instance().startCapture();
+    // Record *rec = new Record();
+    // rec->startService();
+    // ScreenCaptureManager::Instance().startCapture();
 }
 
 void MainWindow::clientRecMegSlot(const json &msg)

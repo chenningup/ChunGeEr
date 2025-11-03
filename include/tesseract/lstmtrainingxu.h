@@ -11,16 +11,9 @@
 #if defined(__USE_GNU)
 #  include <cfenv> // for feenableexcept
 #endif
-#include "commontraining.h"
-#include "fileio.h" // for LoadFileLinesToStrings
-#include "lstmtester.h"
-#include "lstmtrainer.h"
-#include "params.h"
-#include "tprintf.h"
-#include "unicharset_training_utils.h"
+
 #include <cstdlib>
-
-
+#include <tesseract/baseapi.h>
 
 using namespace tesseract;
 class MYLIB_API lstmtraining {
@@ -34,6 +27,12 @@ public:
         void set_max_iterations(int value);
         void set_target_error_rate(double value);
         void set_stop_training(bool stop);
+        void set_filenames(const std::vector<std::string> &files);
 
 		int startTrain();
+
+		void extractTraineddataToFile(const std::string &value,const std::string &output);
+
+private:
+      std::vector<std::string> filenames;
 };

@@ -15,7 +15,7 @@ OcrMnager &OcrMnager::Instance()
 
 void OcrMnager::init()
 {
-    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "chi_sim_custom") != 0)
+    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang+chi_sim") != 0)
     {
         qDebug()<< "tesseract init error";
         return ;

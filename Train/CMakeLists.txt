@@ -19,7 +19,7 @@ else()
     # Release 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Release)
 endif()
-
+link_directories(${CMAKE_SOURCE_DIR}/../Libs/)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -57,12 +57,26 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_libraries(Train PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Core
         tesseract55d
-        lstmevalxu)
+        lstmevalxu
+        org.sw.demo.danbloomberg.leptonica-1.85.0
+        tesseractrain
+        opencv_core490d
+        opencv_calib3d490d
+        opencv_imgcodecs490d
+        opencv_imgproc490d
+        opencv_highgui490d)
 else()
     target_link_libraries(Train PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Core
         tesseract55
-        lstmevalxu)
+        lstmevalxu
+        org.sw.demo.danbloomberg.leptonica-1.85.0
+        tesseractrain
+        opencv_core490
+        opencv_calib3d490
+        opencv_imgcodecs490
+        opencv_imgproc490
+        opencv_highgui490)
 endif()
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

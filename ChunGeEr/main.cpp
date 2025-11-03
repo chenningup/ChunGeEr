@@ -346,7 +346,7 @@ int main(int argc, char *argv[])
 
 
     tesseract::TessBaseAPI tess;
-    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "chi_sim_custom+chi_sim") != 0) {
+    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang+chi_sim") != 0) {
         return 0;
     }
     QDir dir(QApplication::applicationDirPath());
@@ -376,17 +376,17 @@ int main(int argc, char *argv[])
     //     } else {
     //         cvtColor(imageMat, gray, COLOR_BGR2GRAY);
     //     }
-    //     //        cv::imshow("gray", gray);
-    //     //        cv::waitKey(0);
+    //            cv::imshow("gray", gray);
+    //            cv::waitKey(0);
     //     // Otsu 自动阈值二值化
     //     Mat binary;
     //     cv::threshold(gray, binary, 105, 255, THRESH_BINARY);
 
     //     // // 保存结果
     //     QString output = QString("output_%1.png").arg(file);
-    //     //        cv::imshow("binary", binary);
-    //     //        cv::waitKey(0);
-    //     cv::imwrite(output.toStdString(), binary);
+    //            cv::imshow("binary", binary);
+    //            cv::waitKey(0);
+    //     //cv::imwrite(output.toStdString(), binary);
     //     qDebug()<<binary.channels();
     //     PIX* image = nullptr;
     //     if (binary.channels() == 1) {  // 灰度图

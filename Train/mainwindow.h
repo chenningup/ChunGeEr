@@ -20,6 +20,9 @@ private slots:
 
     void on_trainBtn_clicked();
 
+    void on_openImagePathBtn_clicked();
+private:
+    void init();
 private:
     Ui::MainWindow *ui;
 };

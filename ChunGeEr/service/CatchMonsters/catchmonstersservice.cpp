@@ -4,6 +4,8 @@
 #include "../../Detector/detectormanager.h"
 #include <QDebug>
 #include "../../Ocr/ocrmnager.h"
+#include <QDateTime>
+#include "../../LeoControl/mousekeyboardmanager.h"
 CatchMonstersService::CatchMonstersService(QObject *parent):BaseService(parent)
 {
 
@@ -75,6 +77,8 @@ void CatchMonstersService::run()
             if(res.size() != 0)
             {
                 // 25  160 27
+                MouseKeyboardManager::Instance().clickButton(9);
+                QThread::msleep(500);
                 cv::Rect ocr_rect(310, 60, 83, 20); // 从 (100,50) 开始，截取 200x150 的区域
                 // 截取 ROI
                 cv::Mat cormat = img1(ocr_rect).clone();
@@ -82,6 +86,11 @@ void CatchMonstersService::run()
                 QString res = OcrMnager::Instance().identify(cormat);
                 cv::imshow("identify", cormat);
                 cv::waitKey(1);
+                if(res.replace(" ","") != "轩辕禁卫")
+                {
+                    QString output = QString("output_%1.png").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));
+                    cv::imwrite(output.toStdString(), cormat);
+                }
                 qDebug()<<"res" << res;
             }
             cv::imshow("Live", img);

@@ -127,11 +127,11 @@ void ClientDungeonService::run()
         {
             qDebug()<<"PickUp";
             chooseLeftGame();
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().clickButton(192);
-            QThread::msleep(500);
+            QThread::msleep(300);
             chooseRightGame();
-            QThread::msleep(500);
+            QThread::msleep(300);
             MouseKeyboardManager::Instance().clickButton(192);
         }
         if(task == "FollowLeader")
@@ -139,21 +139,21 @@ void ClientDungeonService::run()
             qDebug()<<"FollowLeader";
             chooseLeftGame();
             MouseKeyboardManager::Instance().mouseMoveDirect(42,192);
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseRightClick();
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseMoveDirect(42 + 61,192 + 55);
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseClick();
 
             chooseRightGame();
 
             MouseKeyboardManager::Instance().mouseMoveDirect(932,192);
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseRightClick();
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseMoveDirect(932 + 61,192 + 55);
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseClick();
             qDebug()<<"FollowLeader";
         }

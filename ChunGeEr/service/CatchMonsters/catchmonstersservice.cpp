@@ -10,7 +10,7 @@ CatchMonstersService::CatchMonstersService(QObject *parent):BaseService(parent)
 {
 
 }
-int index = 51;
+int index = 0;
 void CatchMonstersService::run()
 {
     cv::namedWindow("Live", cv::WINDOW_AUTOSIZE);
@@ -78,18 +78,31 @@ void CatchMonstersService::run()
             {
                 // 25  160 27
                 MouseKeyboardManager::Instance().clickButton(9);
-                QThread::msleep(500);
-                cv::Rect ocr_rect(310, 60, 83, 20); // 从 (100,50) 开始，截取 200x150 的区域
+                QThread::msleep(200);
+                cv::Rect ocr_rect(320, 60, 83, 23); // 从 (100,50) 开始，截取 200x150 的区域
                 // 截取 ROI
                 cv::Mat cormat = img1(ocr_rect).clone();
 
                 QString res = OcrMnager::Instance().identify(cormat);
                 cv::imshow("identify", cormat);
                 cv::waitKey(1);
-                if(res.replace(" ","") != "轩辕禁卫")
+                if(!res.replace(" ","").contains("轩辕禁卫"))
                 {
-                    QString output = QString("output_%1.png").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));
-                    cv::imwrite(output.toStdString(), cormat);
+                    QString output = QString("output_%1.png").arg(index);
+                     cv::Mat gray;
+                    if (cormat.channels() == 4)
+                    {
+                        cv::cvtColor(cormat, gray, cv::COLOR_BGRA2GRAY);
+                    }
+                    else
+                    {
+                        cv::cvtColor(cormat, gray, cv::COLOR_BGR2GRAY);
+                    }
+                     cv::Mat binary;
+                    cv::threshold(gray, binary, 105, 255, cv::THRESH_BINARY);
+                    cv::imwrite(output.toStdString(), binary);
+                    emit SignalSlotConnector::Instance().log("未识别到 禁卫 写入,:"+res);
+                    index++;
                 }
                 qDebug()<<"res" << res;
             }

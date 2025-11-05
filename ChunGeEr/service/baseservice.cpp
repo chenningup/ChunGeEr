@@ -1,6 +1,7 @@
 #include "baseservice.h"
 #include "../KeyboardListener/keyboardlistener.h"
 #include "../LeoControl/mousekeyboardmanager.h"
+#include <windows.h>
 BaseService::BaseService(QObject *parent)
     : QThread{parent},toRun(false)
 {
@@ -74,6 +75,47 @@ NameColor BaseService::detectNameColor(const cv::Mat &image)
         return NAME_WHITE;
 
     return NAME_UNKNOWN;
+}
+
+void BaseService::setDatangWindowPos()
+{
+    QList<HWND>hwndlist;
+    HWND hWnd;
+    hWnd = GetDesktopWindow();
+
+    HWND hCurrentWindow = GetWindow(hWnd, GW_CHILD);
+    TCHAR buff[255];
+
+    while (hCurrentWindow != 0)
+    {
+        memset(buff, 0, 255);
+        if ((GetWindowText(hCurrentWindow, buff, 255) > 0) &&
+            IsWindowVisible(hCurrentWindow))
+        {
+            if (QString::fromWCharArray(buff).contains("大唐无双"))
+            {
+                hwndlist.push_back(hCurrentWindow);
+                memset(buff, 0, 255);
+            }
+        }
+        hCurrentWindow = GetNextWindow(hCurrentWindow, GW_HWNDNEXT);
+    }
+    for (int i = 0; i < hwndlist.size(); ++i)
+    {
+        RECT rect;
+        if (GetClientRect(hwndlist[i], &rect))
+        {
+            if(i == 0 )
+            {
+                ::SetWindowPos(hwndlist[i], HWND_TOP, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_SHOWWINDOW);
+            }
+            else
+            {
+                ::SetWindowPos(hwndlist[i], HWND_TOP, 1920 - 1400, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_SHOWWINDOW);
+            }
+        }
+    }
+
 }
 
 void BaseService::receiveCaptureScreen(ScreenCaptureManager::ScreenData data)

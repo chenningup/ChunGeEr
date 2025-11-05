@@ -7,10 +7,11 @@
 #include <QDir>
 #include "tesseract/TesseractTrain.h"
 #include "tesseract/lstmtrainingxu.h"
+#include "XuLog.h"
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-
+    XuLog::Instance()->init();
     // tesseract::TessBaseAPI tess;
     // if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang+chi_sim") != 0) {
     //     return 0;

@@ -6,6 +6,7 @@
 #include "../WsManager/wsmanager.h"
 #include <opencv2/opencv.hpp>
 #include <QMutex>
+#include "../signalslotconnector.h"
 enum NameColor {
     NAME_RED,
     NAME_WHITE,
@@ -18,20 +19,17 @@ public:
     explicit BaseService(QObject *parent = nullptr);
 
     virtual void run();
-
     virtual void clientHandleRecMsg(const json &data);
-
     virtual void handlePressEvent(int vkCode);
-
     virtual void startService()=0;
-
     virtual void stopService()=0;
 
     void chooseLeftGame();
-
     void chooseRightGame();
 
     NameColor detectNameColor(const cv::Mat& image);
+
+    void setDatangWindowPos();
 signals:
 
 public slots:

@@ -335,6 +335,7 @@ void MainWindow::on_testButton_clicked()
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
    CatchMonstersService *service = new CatchMonstersService();
+   service->setDatangWindowPos();
    service->startService();
    ScreenCaptureManager::Instance().startCapture();
 

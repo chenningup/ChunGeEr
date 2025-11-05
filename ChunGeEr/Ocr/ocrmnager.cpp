@@ -15,7 +15,7 @@ OcrMnager &OcrMnager::Instance()
 
 void OcrMnager::init()
 {
-    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang+chi_sim") != 0)
+    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang") != 0)
     {
         qDebug()<< "tesseract init error";
         return ;
@@ -41,8 +41,8 @@ QString OcrMnager::identify(cv::Mat &pic)
     }
     Mat binary;
     threshold(gray, binary, 105, 255, THRESH_BINARY);
-    QString fineName = QString("binary_%1.png").arg(index);
-    cv::imwrite(fineName.toStdString(), binary);
+//    QString fineName = QString("binary_%1.png").arg(index);
+//    cv::imwrite(fineName.toStdString(), binary);
     index++;
     PIX* image = nullptr;
     if (binary.channels() == 1)

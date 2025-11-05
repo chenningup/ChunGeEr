@@ -15,12 +15,26 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+
+
+signals:
+    void startBox();
+    void stopBox();
+    void startTrain();
+    void stopTrain();
+    void log(const QString &info);
 private slots:
     void on_boxBtn_clicked();
 
     void on_trainBtn_clicked();
 
     void on_openImagePathBtn_clicked();
+
+    void on_startBox();
+    void on_stopBox();
+    void on_startTrain();
+    void on_stopTrain();
+    void on_log(const QString &info);
 private:
     void init();
 private:

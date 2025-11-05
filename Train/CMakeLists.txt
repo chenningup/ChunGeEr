@@ -12,6 +12,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Core)
 
+
+include_directories(${CMAKE_SOURCE_DIR}/../Log)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Debug)
@@ -64,7 +66,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         opencv_calib3d490d
         opencv_imgcodecs490d
         opencv_imgproc490d
-        opencv_highgui490d)
+        opencv_highgui490d
+        XuLog)
 else()
     target_link_libraries(Train PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Core
@@ -76,7 +79,8 @@ else()
         opencv_calib3d490
         opencv_imgcodecs490
         opencv_imgproc490
-        opencv_highgui490)
+        opencv_highgui490
+        XuLog)
 endif()
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

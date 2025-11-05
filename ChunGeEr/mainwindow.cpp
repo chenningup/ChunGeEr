@@ -335,8 +335,23 @@ void MainWindow::on_testButton_clicked()
     // StorageVidoeManager::Instance().stopSaveVideo();
     // EncodingManager::Instance().stopEncodeing();
    CatchMonstersService *service = new CatchMonstersService();
-   service->startService();
-   ScreenCaptureManager::Instance().startCapture();
+   //service->startService();
+   //ScreenCaptureManager::Instance().startCapture();
+
+   cv::Mat img = cv::imread("Snipaste_2025-11-04_21-46-24.bmp");
+
+   cv::Rect ocr_rect(100, 40, 80, 20); // 从 (100,50) 开始，截取 200x150 的区域
+   // 截取 ROI
+   cv::Mat cormat = img(ocr_rect).clone();
+   cv::imshow("asdfasdf", cormat);
+   cv::waitKey();
+   NameColor color = service->detectNameColor(cormat);
+
+   switch (color) {
+   case NAME_RED: qDebug()<<"检测到红名\n"; break;
+   case NAME_WHITE:  qDebug() << "检测到白名\n"; break;
+   default:  qDebug() << "颜色不确定\n"; break;
+   }
     // Record *rec = new Record();
     // rec->startService();
     // ScreenCaptureManager::Instance().startCapture();

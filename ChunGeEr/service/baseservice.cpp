@@ -48,7 +48,8 @@ NameColor BaseService::detectNameColor(const cv::Mat &image)
 
     cv::Mat hsv;
     cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
-
+    cv::imshow("hsv", hsv);
+    cv::waitKey();
     // 红色的两个HSV区间（红色在H=0附近会跨两个区间）
     cv::Mat mask1, mask2, redMask;
     cv::inRange(hsv, cv::Scalar(0, 100, 100), cv::Scalar(10, 255, 255), mask1);
@@ -67,9 +68,9 @@ NameColor BaseService::detectNameColor(const cv::Mat &image)
     double whiteRatio = (double)whiteCount / total;
 
     // 阈值可根据实际情况调整
-    if (redRatio > 0.15 && redRatio > whiteRatio * 1.2)
+    if (redRatio > 0.10 && redRatio > whiteRatio * 1.2)
         return NAME_RED;
-    if (whiteRatio > 0.15 && whiteRatio > redRatio * 1.2)
+    if (whiteRatio > 0.10 && whiteRatio > redRatio * 1.2)
         return NAME_WHITE;
 
     return NAME_UNKNOWN;

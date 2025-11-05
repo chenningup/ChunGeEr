@@ -6,6 +6,11 @@
 #include "../WsManager/wsmanager.h"
 #include <opencv2/opencv.hpp>
 #include <QMutex>
+enum NameColor {
+    NAME_RED,
+    NAME_WHITE,
+    NAME_UNKNOWN
+};
 class BaseService : public QThread
 {
     Q_OBJECT
@@ -25,6 +30,8 @@ public:
     void chooseLeftGame();
 
     void chooseRightGame();
+
+    NameColor detectNameColor(const cv::Mat& image);
 signals:
 
 public slots:

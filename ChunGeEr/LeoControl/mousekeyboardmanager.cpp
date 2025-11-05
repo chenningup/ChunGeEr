@@ -8,7 +8,7 @@
 #include <windows.h>
 #include <cmath>
 #include <QDateTime>
-#include "Commons/Log/XuLog.h"
+#include "XuLog.h"
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "imm32.lib")
 static QHash<int,int>keyHash ={

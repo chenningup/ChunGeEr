@@ -14,7 +14,7 @@
 #include <fstream>
 #include <random>
 #include <QDir>
-#include "Commons/Log/XuLog.h"
+#include "XuLog.h"
 using namespace cv;
 using namespace std;
 

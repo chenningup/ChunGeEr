@@ -24,7 +24,8 @@ set(COMMON_OPTIONS
     "/await"
     "/EHsc"
 )
-
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets SerialPort)
 add_library(ScreenCapture STATIC
     ${CMAKE_SOURCE_DIR}/../ScreenCapture/pch.cpp
     ${CMAKE_SOURCE_DIR}/../ScreenCapture/pch.h
@@ -46,14 +47,18 @@ add_library(YoloOnnx STATIC
 include_directories(YoloOnnx ${CMAKE_SOURCE_DIR}/../include/onnx)
 target_link_libraries(YoloOnnx ${CMAKE_SOURCE_DIR}/../Libs/onnxruntime.lib)
 
-
-
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets SerialPort)
+add_library(XuLog SHARED
+    ${CMAKE_SOURCE_DIR}/../Log/XuLog.cpp
+    ${CMAKE_SOURCE_DIR}/../Log/XuLog.h
+)
+target_link_libraries(XuLog PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Core
+    )
 
 include_directories(${CMAKE_SOURCE_DIR}/../include)
 include_directories(${CMAKE_SOURCE_DIR}/../ScreenCapture/)
 include_directories(${CMAKE_SOURCE_DIR}/../YoloOnnx/)
+include_directories(${CMAKE_SOURCE_DIR}/../Log)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug 配置
     link_directories(${CMAKE_SOURCE_DIR}/../Libs/Debug)
@@ -97,7 +102,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Encode/encodingmanager.cpp Encode/encodingmanager.h
         signalslotconnector.h signalslotconnector.cpp
         service/Record/record.h service/Record/record.cpp
-        Commons/Log/XuLog.cpp Commons/Log/XuLog.h
         LeoControl/serialportmanager.h LeoControl/serialportmanager.cpp
     )
 target_include_directories(ChunGeEr PRIVATE
@@ -146,7 +150,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         avformat
         onnxruntime
         YoloOnnx
-        opencv_dnn490d)
+        opencv_dnn490d
+        XuLog)
 target_link_libraries(ChunGeEr PRIVATE Qt6::Core)
 else()
     # Release 配置
@@ -173,7 +178,8 @@ else()
         avformat
         onnxruntime
         YoloOnnx
-        opencv_dnn490)
+        opencv_dnn490
+        XuLog)
 endif()
 
 

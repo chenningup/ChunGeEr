@@ -167,21 +167,28 @@ void ClientDungeonService::run()
             MouseKeyboardManager::Instance().mouseMoveDirect(600,400);
             QThread::msleep(500);
             MouseKeyboardManager::Instance().mouseClick();
-            QThread::msleep(2000);
-            MouseKeyboardManager::Instance().clickButton('4');
-            QThread::msleep(500);
-            MouseKeyboardManager::Instance().mouseClick();
 
             chooseRightGame();
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().clickButton('3');
             QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseMoveDirect(1920 - 600 ,400);
-            QThread::msleep(500);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseClick();
-            QThread::msleep(2000);
+            QThread::msleep(200);
+            chooseLeftGame();
             MouseKeyboardManager::Instance().clickButton('4');
-            QThread::msleep(500);
+            QThread::msleep(200);
+            MouseKeyboardManager::Instance().mouseMoveDirect(600,400);
+            QThread::msleep(200);
+            MouseKeyboardManager::Instance().mouseClick();
+
+            chooseRightGame();
+            QThread::msleep(200);
+            MouseKeyboardManager::Instance().clickButton('4');
+            QThread::msleep(200);
+            MouseKeyboardManager::Instance().mouseMoveDirect(1920 - 600 ,400);
+            QThread::msleep(200);
             MouseKeyboardManager::Instance().mouseClick();
         }
         if(task == "FollowSup")

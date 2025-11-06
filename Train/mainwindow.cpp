@@ -6,6 +6,7 @@
 #include <QDir>
 #include <opencv2/opencv.hpp>
 #include <QFileDialog>
+#include "XuLog.h"
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -159,6 +160,7 @@ void MainWindow::on_trainBtn_clicked()
         QStringList bmplstmfs = dir.entryList(filterslstmf, QDir::Files | QDir::NoDotAndDotDot);
         if(bmplstmfs.isEmpty())
         {
+             emit stopTrain();
             return;
         }
         std::vector<std::string> filenameList;
@@ -245,23 +247,27 @@ void MainWindow::on_openImagePathBtn_clicked()
 void MainWindow::on_startBox()
 {
     ui->boxBtn->setDisabled(true);
+    ui->trainBtn->setDisabled(true);
     ui->textEdit->clear();
 }
 
 void MainWindow::on_stopBox()
 {
     ui->boxBtn->setDisabled(false);
+    ui->trainBtn->setDisabled(false);
 }
 
 void MainWindow::on_startTrain()
 {
     ui->trainBtn->setDisabled(true);
+    ui->boxBtn->setDisabled(true);
     ui->textEdit->clear();
 }
 
 void MainWindow::on_stopTrain()
 {
     ui->trainBtn->setDisabled(false);
+     ui->boxBtn->setDisabled(false);
 }
 
 void MainWindow::on_log(const QString &info)
@@ -280,7 +286,7 @@ void MainWindow::init()
     ui->psm_comboBox->setCurrentText("6");
     ui->max_iterations_lineEdit->setText("0");
     ui->target_error_rate_lineEdit->setText("0.001");
-
+    XuLog::Instance()->attachGetLogFun(std::bind(&MainWindow::clientGetLogInfo, this, std::placeholders::_1, std::placeholders::_2,std::placeholders::_3, std::placeholders::_4));
     QString tessdata_path = QApplication::applicationDirPath()+"/tessdata";
 
     QDir dir(tessdata_path);
@@ -307,4 +313,8 @@ void MainWindow::init()
         }
     }
     ui->language_comboBox->setCurrentText("chi_sim");
+}
+void MainWindow::clientGetLogInfo(int inttype, const std::string &type, const std::string &logstr, const std::string &time)
+{
+    emit log(QString::fromStdString(logstr));
 }

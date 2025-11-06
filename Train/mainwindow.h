@@ -16,7 +16,7 @@ public:
     ~MainWindow();
 
 
-
+    void clientGetLogInfo(int inttype, const std::string &type, const std::string &logstr, const std::string &time);
 signals:
     void startBox();
     void stopBox();

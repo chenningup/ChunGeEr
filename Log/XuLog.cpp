@@ -29,8 +29,9 @@ protected:
             std::snprintf(time_str + std::strlen(time_str), sizeof(time_str) - std::strlen(time_str), ".%03d", static_cast<int>(milliseconds.count()));
             QString file =  msg.source.filename;
             QStringList fileList = file.split("/");
-            std::string formatted_log = fmt::format("{:s}[{}]: {}\n",
-                                                fileList.size()>=2? fileList.last().toStdString():msg.source.filename,msg.source.line, msg.payload);
+//            std::string formatted_log = fmt::format("{:s}[{}]: {}\n",
+//                                                fileList.size()>=2? fileList.last().toStdString():msg.source.filename,msg.source.line, msg.payload);
+            std::string formatted_log = fmt::format("{}\n",msg.payload);
             string_view_t type = spdlog::level::to_string_view(msg.level);
             XuLog::Instance()->callBackLog(msg.level,std::string(type.data(), type.size()),formatted_log,std::string(time_str));
         }

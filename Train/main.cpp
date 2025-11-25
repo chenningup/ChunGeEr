@@ -11,6 +11,7 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    a.setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, false);
     XuLog::Instance()->init();
     // tesseract::TessBaseAPI tess;
     // if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang+chi_sim") != 0) {

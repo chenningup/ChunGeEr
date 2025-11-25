@@ -2,6 +2,7 @@
 #include "../KeyboardListener/keyboardlistener.h"
 #include "../LeoControl/mousekeyboardmanager.h"
 #include <windows.h>
+#include "XuLog.h"
 BaseService::BaseService(QObject *parent)
     : QThread{parent},toRun(false)
 {
@@ -49,8 +50,8 @@ NameColor BaseService::detectNameColor(const cv::Mat &image)
 
     cv::Mat hsv;
     cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
-    cv::imshow("hsv", hsv);
-    cv::waitKey();
+    // cv::imshow("hsv", hsv);
+    // cv::waitKey();
     // 红色的两个HSV区间（红色在H=0附近会跨两个区间）
     cv::Mat mask1, mask2, redMask;
     cv::inRange(hsv, cv::Scalar(0, 100, 100), cv::Scalar(10, 255, 255), mask1);
@@ -67,11 +68,11 @@ NameColor BaseService::detectNameColor(const cv::Mat &image)
 
     double redRatio   = (double)redCount / total;
     double whiteRatio = (double)whiteCount / total;
-
+    infof("redRatio:{},whiteRatio:{}",redRatio,whiteRatio);
     // 阈值可根据实际情况调整
     if (redRatio > 0.10 && redRatio > whiteRatio * 1.2)
         return NAME_RED;
-    if (whiteRatio > 0.10 && whiteRatio > redRatio * 1.2)
+    if (whiteRatio > 0.05 && whiteRatio > redRatio * 1.2)
         return NAME_WHITE;
 
     return NAME_UNKNOWN;
@@ -100,6 +101,7 @@ void BaseService::setDatangWindowPos()
         }
         hCurrentWindow = GetNextWindow(hCurrentWindow, GW_HWNDNEXT);
     }
+    infof("hwndlist size :{}",hwndlist.size());
     for (int i = 0; i < hwndlist.size(); ++i)
     {
         RECT rect;
@@ -107,6 +109,7 @@ void BaseService::setDatangWindowPos()
         {
             if(i == 0 )
             {
+                infof("hwndlist size :{},{},{},{}",rect.right,rect.left,rect.bottom,rect.top);
                 ::SetWindowPos(hwndlist[i], HWND_TOP, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_SHOWWINDOW);
             }
             else
@@ -115,7 +118,6 @@ void BaseService::setDatangWindowPos()
             }
         }
     }
-
 }
 
 void BaseService::receiveCaptureScreen(ScreenCaptureManager::ScreenData data)

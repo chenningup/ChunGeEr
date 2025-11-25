@@ -79,7 +79,7 @@ MainWindow::MainWindow(QWidget *parent)
     //QThread::sleep(5);
     //MouseKeyboardManager::Instance().clickButton('a');
     //qDebug()<<"click button";
-    // MouseKeyboardManager::Instance().mouseRelease(2);
+    //MouseKeyboardManager::Instance().mouseRelease(2);
     //MouseKeyboardManager::Instance().mouseMoveDirect(1900,500);
     // while(true)
     // {
@@ -339,6 +339,11 @@ void MainWindow::on_testButton_clicked()
    service->startService();
    ScreenCaptureManager::Instance().startCapture();
 
+
+   // QTimer::singleShot(5000, this, [this,service]() {
+   //     service->test();
+   //     qDebug() << "Single shot timer triggered after 1 second";
+   // });
 //   cv::Mat img = cv::imread("Snipaste_2025-11-04_21-46-24.bmp");
 
 //   cv::Rect ocr_rect(100, 40, 80, 20); // 从 (100,50) 开始，截取 200x150 的区域

@@ -14,6 +14,7 @@ public:
 
     void stopService();
 
+    void test();
 signals:
 
 };

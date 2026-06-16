@@ -29,9 +29,13 @@ public:
     void HandelClientRecKeybordPressSync(const json &msg);
     void HandelClientRecKeybordReleaseSync(const json &msg);
     void HandelClientRecMousewheelSync(const json &msg);
+
+    void startMainQuest();          // 外部/命令行触发主线任务
+
 private slots:
 
     void on_testButton_clicked();
+    void on_ocrEngineCombo_currentIndexChanged(int index);
     void clientRecMegSlot(const json &msg);
     void serverRecMegSlot(const json &msg);
     void on_screenShareButton_clicked();
@@ -41,6 +45,7 @@ private slots:
     void ServerRecClientConnect(QString ip);
     void ServerRecClientDisConnect(QString ip);
     void on_dungeonPushButton_clicked();
+    void on_mainQuestButton_clicked();
 
     void receiveLog(const QString &str);
 private:

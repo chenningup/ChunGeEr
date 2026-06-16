@@ -39,10 +39,38 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="mainQuestButton">
+        <property name="text">
+         <string>主线任务</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="testButton">
         <property name="text">
          <string>test</string>
         </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="ocrEngineLabel">
+        <property name="text">
+         <string>OCR:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="ocrEngineCombo">
+        <item>
+         <property name="text">
+          <string>PaddleOCR</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Tesseract</string>
+         </property>
+        </item>
        </widget>
       </item>
      </layout>

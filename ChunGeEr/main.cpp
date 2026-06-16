@@ -1,6 +1,4 @@
 #include "mainwindow.h"
-#include <tesseract/baseapi.h>
-#include <leptonica/allheaders.h>
 #include <QApplication>
 #include <QDebug>
 
@@ -15,8 +13,219 @@
 #include <random>
 #include <QDir>
 #include "XuLog.h"
+#include <windows.h>
 using namespace cv;
 using namespace std;
+
+// ═══════════════════════════════════════════════════════════
+// 文字预处理：Top-Hat 提取游戏文字 → 白底黑字
+// ═══════════════════════════════════════════════════════════
+static void preprocessForOCR(const Mat &src, Mat &dst)
+{
+    Mat gray;
+    if (src.channels() == 3) cvtColor(src, gray, COLOR_BGR2GRAY);
+    else gray = src.clone();
+
+    Mat upscaled;
+    resize(gray, upscaled, Size(), 3.0, 3.0, INTER_CUBIC);
+
+    int ks = max(3, upscaled.cols / 20);
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(ks, ks));
+    Mat tophat, blackhat;
+    morphologyEx(upscaled, tophat, MORPH_TOPHAT, kernel);
+    morphologyEx(upscaled, blackhat, MORPH_BLACKHAT, kernel);
+    Mat merged = tophat + blackhat;
+
+    Mat binary;
+    threshold(merged, binary, 0, 255, THRESH_BINARY | THRESH_OTSU);
+    double fg = countNonZero(binary) / (double)(binary.rows * binary.cols);
+    if (fg < 0.02 || fg > 0.90) {
+        adaptiveThreshold(upscaled, binary, 255,
+                         ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 13, 5);
+        Scalar m = mean(binary);
+        if (m[0] > 128) bitwise_not(binary, binary);
+    }
+
+    Mat dk = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
+    morphologyEx(binary, binary, MORPH_OPEN, dk);
+    morphologyEx(binary, binary, MORPH_CLOSE, getStructuringElement(MORPH_RECT, Size(3, 1)));
+    bitwise_not(binary, binary);
+    copyMakeBorder(binary, dst, 12, 12, 12, 12, BORDER_CONSTANT, Scalar(255));
+}
+
+// ═══════════════════════════════════════════════════════════
+// GDI 桌面截图（全屏）
+// ═══════════════════════════════════════════════════════════
+static bool captureDesktopGDI(const string &path)
+{
+    HDC hdcScreen = GetDC(nullptr);
+    if (!hdcScreen) return false;
+    int sw = GetSystemMetrics(SM_CXSCREEN);
+    int sh = GetSystemMetrics(SM_CYSCREEN);
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    HBITMAP hbm = CreateCompatibleBitmap(hdcScreen, sw, sh);
+    HGDIOBJ old = SelectObject(hdcMem, hbm);
+    BitBlt(hdcMem, 0, 0, sw, sh, hdcScreen, 0, 0, SRCCOPY);
+    Mat img(sh, sw, CV_8UC4);
+    BITMAPINFOHEADER bi = {};
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = sw;
+    bi.biHeight = -sh;
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+    GetDIBits(hdcMem, hbm, 0, sh, img.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+    Mat bgr;
+    cvtColor(img, bgr, COLOR_BGRA2BGR);
+    SelectObject(hdcMem, old); DeleteObject(hbm); DeleteDC(hdcMem);
+    ReleaseDC(nullptr, hdcScreen);
+    imwrite(path, bgr);
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════════
+// GDI 窗口截图（仅截指定窗口区域）
+// ═══════════════════════════════════════════════════════════
+static bool captureWindowGDI(const string &path, HWND hwnd)
+{
+    RECT rect;
+    if (!GetWindowRect(hwnd, &rect)) return false;
+    int w = rect.right - rect.left;
+    int h = rect.bottom - rect.top;
+    if (w <= 0 || h <= 0) return false;
+    printf("[WNDCAP] 窗口位置 (%d,%d) 大小 %dx%d\n", rect.left, rect.top, w, h);
+
+    HDC hdcScreen = GetDC(nullptr);
+    if (!hdcScreen) return false;
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    HBITMAP hbm = CreateCompatibleBitmap(hdcScreen, w, h);
+    HGDIOBJ old = SelectObject(hdcMem, hbm);
+    BitBlt(hdcMem, 0, 0, w, h, hdcScreen, rect.left, rect.top, SRCCOPY);
+
+    Mat img(h, w, CV_8UC4);
+    BITMAPINFOHEADER bi = {};
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = w;
+    bi.biHeight = -h;
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+    GetDIBits(hdcMem, hbm, 0, h, img.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+
+    Mat bgr;
+    cvtColor(img, bgr, COLOR_BGRA2BGR);
+
+    SelectObject(hdcMem, old); DeleteObject(hbm); DeleteDC(hdcMem);
+    ReleaseDC(nullptr, hdcScreen);
+    imwrite(path, bgr);
+    printf("[WNDCAP] 保存 %s\n", path.c_str());
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════════
+// 文字区域检测 + 裁剪
+// ═══════════════════════════════════════════════════════════
+static int cropTextRegions(const string &imgPath, const string &outDir)
+{
+    Mat src = imread(imgPath);
+    if (src.empty()) { printf("[CROP] 无法读取图片\n"); return 1; }
+    printf("[CROP] 图片: %dx%d\n", src.cols, src.rows);
+    filesystem::create_directories(outDir);
+
+    Mat gray, enhanced;
+    cvtColor(src, gray, COLOR_BGR2GRAY);
+    Ptr<CLAHE> clahe = createCLAHE(2.0, Size(8, 8));
+    clahe->apply(gray, enhanced);
+
+    vector<Rect> candidates;
+    // A: 自适应阈值
+    {
+        Mat binInv;
+        adaptiveThreshold(enhanced, binInv, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 15, 8);
+        Mat kernel = getStructuringElement(MORPH_RECT, Size(8, 2));
+        Mat closed;
+        morphologyEx(binInv, closed, MORPH_CLOSE, kernel, Point(-1,-1), 2);
+        vector<vector<Point>> conts;
+        findContours(closed, conts, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+        for (auto &c : conts) {
+            Rect r = boundingRect(c);
+            double ar = (double)r.width / r.height;
+            if (r.area() > 80 && r.width > 12 && r.height > 8 && ar > 0.3 && ar < 20.0 && r.width < src.cols * 0.8)
+                candidates.push_back(r);
+        }
+    }
+    // B: 形态学梯度
+    {
+        Mat grad;
+        morphologyEx(enhanced, grad, MORPH_GRADIENT, getStructuringElement(MORPH_RECT, Size(3, 3)));
+        Mat thresh;
+        threshold(grad, thresh, 30, 255, THRESH_BINARY);
+        Mat closed;
+        morphologyEx(thresh, closed, MORPH_CLOSE, getStructuringElement(MORPH_RECT, Size(12, 3)));
+        vector<vector<Point>> conts;
+        findContours(closed, conts, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+        for (auto &c : conts) {
+            Rect r = boundingRect(c);
+            double ar = (double)r.width / r.height;
+            if (r.area() > 60 && r.width > 10 && r.height > 6 && ar > 0.5 && ar < 25.0 && r.width < src.cols * 0.8)
+                candidates.push_back(r);
+        }
+    }
+    // 合并重叠
+    vector<Rect> merged;
+    for (size_t i = 0; i < candidates.size(); i++) {
+        bool found = false;
+        for (size_t j = 0; j < merged.size(); j++) {
+            if ((candidates[i] & merged[j]).area() > 0) {
+                merged[j] = merged[j] | candidates[i]; found = true; break;
+            }
+        }
+        if (!found) merged.push_back(candidates[i]);
+    }
+    sort(merged.begin(), merged.end(), [](const Rect &a, const Rect &b) {
+        if (abs(a.y - b.y) < 30) return a.x < b.x;
+        return a.y < b.y;
+    });
+
+    int saved = 0;
+    for (size_t i = 0; i < merged.size(); i++) {
+        Rect r = merged[i];
+        int px = max(0, r.x - 4), py = max(0, r.y - 4);
+        int pw = min(src.cols - px, r.width + 8), ph = min(src.rows - py, r.height + 8);
+        Rect safe(px, py, pw, ph);
+        if (safe.width < 15 || safe.height < 10) continue;
+        if ((double)safe.width / safe.height > 30) continue;
+        Mat crop = src(safe).clone();
+        char name[256];
+        snprintf(name, sizeof(name), "%s/crop_%03zu.png", outDir.c_str(), i);
+        imwrite(name, crop);
+        Mat prep;
+        preprocessForOCR(crop, prep);
+        snprintf(name, sizeof(name), "%s/crop_%03zu_prep.png", outDir.c_str(), i);
+        imwrite(name, prep);
+        printf("[CROP] crop_%03zu (%d,%d) %dx%d\n", i, safe.x, safe.y, safe.width, safe.height);
+        saved++;
+    }
+    printf("[CROP] 完成，%d 个区域\n", saved);
+    return 0;
+}
+
+// ═══════════════════════════════════════════════════════════
+// 找游戏窗口
+// ═══════════════════════════════════════════════════════════
+static HWND findGameWindow()
+{
+    HWND hwnd = FindWindowW(nullptr, L"大唐无双公测 - 七侠五义 (4.0.58:1041281  1.0.5:1039767)");
+    if (hwnd) return hwnd;
+    HWND h = FindWindowW(nullptr, nullptr);
+    while (h) {
+        wchar_t title[256];
+        GetWindowTextW(h, title, 256);
+        if (wcsstr(title, L"大唐无双")) return h;
+        h = GetWindow(h, GW_HWNDNEXT);
+    }
+    return nullptr;
+}
 
 unsigned char buffer[100];
 int pr = 0;
@@ -338,77 +547,43 @@ void ClsTest()
 
 int main(int argc, char *argv[])
 {
+    // ── 命令行模式（不需要 QApplication）────────────────────
+    string exePath = argv[0];
+    for (int i = 1; i < argc; i++) {
+        string arg = argv[i];
+
+        if (arg == "--crop-text" && i + 2 < argc) {
+            return cropTextRegions(argv[i + 1], argv[i + 2]);
+        }
+
+        if (arg == "--capture-train" && i + 1 < argc) {
+            string outDir = argv[i + 1];
+            printf("[TRAIN] 全自动训练数据采集 → %s\n", outDir.c_str());
+
+            HWND hwnd = findGameWindow();
+            if (!hwnd) { printf("[TRAIN] 找不到游戏窗口!\n"); return 1; }
+            printf("[TRAIN] 游戏窗口 HWND=0x%llX\n", (uint64_t)hwnd);
+
+            filesystem::create_directories(outDir);
+
+            ShowWindow(hwnd, SW_RESTORE);
+            SetForegroundWindow(hwnd);
+            Sleep(500);
+
+            string capPath = outDir + "/capture.png";
+            printf("[TRAIN] GDI 窗口截图...\n");
+            if (!captureWindowGDI(capPath, hwnd)) {
+                printf("[TRAIN] 截图失败!\n"); return 1;
+            }
+            printf("[TRAIN] 截图完成\n");
+            return cropTextRegions(capPath, outDir);
+        }
+    }
+
+    // ── GUI 模式 ────────────────────────────────────────
     QApplication a(argc, argv);
     XuLog::Instance()->init();
-    //loop();
-    //DetectTest();
-    //QThread::sleep(10);
 
-
-    tesseract::TessBaseAPI tess;
-    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang+chi_sim") != 0) {
-        return 0;
-    }
-    QDir dir(QApplication::applicationDirPath());
-
-    // 设置名称过滤器，只查找.bmp文件
-    QStringList filters;
-    filters << "*.png";
-
-    // 获取所有匹配的文件
-    QStringList bmpFiles = dir.entryList(filters, QDir::Files | QDir::NoDotAndDotDot);
-
-    // 输出结果
-    qDebug() << "Found BMP files:";
-    // foreach (const QString &file, bmpFiles) {
-    //     Mat imageMat = imread(file.toStdString()); // 请替换为你的图片路径
-    //     cv::imshow("imageMat", imageMat);
-    //            cv::waitKey(0);
-    //     qDebug()<<file << imageMat.channels();
-    //     Mat gray;
-    //     if (imageMat.empty())
-    //     {
-    //         cout << "Could not open or find the image!" << endl;
-    //         return -1;
-    //     }
-    //     if (imageMat.channels() == 4) {
-    //         cvtColor(imageMat, gray, COLOR_BGRA2GRAY);
-    //     } else {
-    //         cvtColor(imageMat, gray, COLOR_BGR2GRAY);
-    //     }
-    //            cv::imshow("gray", gray);
-    //            cv::waitKey(0);
-    //     // Otsu 自动阈值二值化
-    //     Mat binary;
-    //     cv::threshold(gray, binary, 105, 255, THRESH_BINARY);
-
-    //     // // 保存结果
-    //     QString output = QString("output_%1.png").arg(file);
-    //            cv::imshow("binary", binary);
-    //            cv::waitKey(0);
-    //     //cv::imwrite(output.toStdString(), binary);
-    //     qDebug()<<binary.channels();
-    //     PIX* image = nullptr;
-    //     if (binary.channels() == 1) {  // 灰度图
-    //         image = pixCreate(binary.cols, binary.rows, 8); // 8位深度
-    //         for (int y = 0; y < binary.rows; y++) {
-    //             for (int x = 0; x < binary.cols; x++) {
-    //                 pixSetPixel(image, x, y, binary.at<uchar>(y, x));
-    //             }
-    //         }
-    //     }
-    //     tess.SetImage(image);
-    //     char *text = tess.GetUTF8Text();
-    //     QString ocrResult = QString::fromUtf8(text);
-    //     qDebug()<<ocrResult;
-    //     pixDestroy(&image);
-    //     delete[] text;
-    // }
-
-    //QString path ="D:\\123.bmp";
-    //   QString path ="test.png";
-    //   Pix *image = pixRead(path.toLocal8Bit().data());
-    //tess.End();
     MainWindow w;
     w.show();
     return a.exec();

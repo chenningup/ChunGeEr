@@ -91,6 +91,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Detector/detectormanager.h Detector/detectormanager.cpp
         service/CatchMonsters/catchmonstersservice.h service/CatchMonsters/catchmonstersservice.cpp
         Ocr/ocrmnager.h Ocr/ocrmnager.cpp
+        Ocr/paddleocr.h Ocr/paddleocr.cpp
+        Ocr/tesseractocr.h Ocr/tesseractocr.cpp
         Control/mouselabel.h Control/mouselabel.cpp
         Ui/screensharewidget.h Ui/screensharewidget.cpp Ui/screensharewidget.ui
         Commons/safepacket.cpp Commons/safepacket.h
@@ -102,6 +104,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Encode/encodingmanager.cpp Encode/encodingmanager.h
         signalslotconnector.h signalslotconnector.cpp
         service/Record/record.h service/Record/record.cpp
+        service/MainQuest/mainquestservice.h service/MainQuest/mainquestservice.cpp
         LeoControl/serialportmanager.h LeoControl/serialportmanager.cpp
     )
 target_include_directories(ChunGeEr PRIVATE
@@ -131,8 +134,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::SerialPort
-        tesseract55d
-        org.sw.demo.danbloomberg.leptonica-1.85.0
         ScreenCapture
         opencv_core490d
         opencv_calib3d490d
@@ -159,8 +160,6 @@ else()
     target_link_libraries(ChunGeEr PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::SerialPort
-        tesseract55
-        org.sw.demo.danbloomberg.leptonica-1.85.0
         ScreenCapture
         opencv_core490
         opencv_calib3d490

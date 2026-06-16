@@ -1,10 +1,16 @@
 #include "ocrmnager.h"
+#include "paddleocr.h"
+#include "tesseractocr.h"
 #include <QDebug>
+#include <QCoreApplication>
+#include <QDir>
+#include "XuLog.h"
+
 using namespace cv;
+
 OcrMnager::OcrMnager(QObject *parent)
     : QObject{parent}
 {
-
 }
 
 OcrMnager &OcrMnager::Instance()
@@ -15,51 +21,71 @@ OcrMnager &OcrMnager::Instance()
 
 void OcrMnager::init()
 {
-    if (tess.Init("D:\\Program Files\\Tesseract-OCR\\tessdata", "datang") != 0)
-    {
-        qDebug()<< "tesseract init error";
-        return ;
+    QString baseDir = QCoreApplication::applicationDirPath() + "/models/ocr";
+
+    // ── PaddleOCR ────────────────────────────
+    QString detPath  = baseDir + "/ch_PP-OCRv3_det_infer.onnx";
+    QString recPath  = baseDir + "/ch_PP-OCRv2_rec_infer.onnx";
+    QString dictPath = baseDir + "/ppocr_keys_v1.txt";
+
+    infof("[OcrMnager] 初始化 PaddleOCR...");
+    m_paddleOcr = std::make_unique<PaddleOcr>();
+    if (m_paddleOcr->init(detPath.toStdString(), recPath.toStdString(), dictPath.toStdString())) {
+        infof("[OcrMnager] PaddleOCR OK");
+    } else {
+        errorf("[OcrMnager] PaddleOCR 失败");
     }
-    qDebug()<< "tesseract init success";
+
+    // ── Tesseract ────────────────────────────
+    // 使用系统安装的 Tesseract（PATH 中或固定路径）
+    QString tessExe = "D:/Program Files/Tesseract-OCR/tesseract.exe";
+    QString tessData = "D:/Program Files/Tesseract-OCR/tessdata";
+    infof("[OcrMnager] 初始化 Tesseract: {}", tessExe.toStdString());
+    m_tessOcr = std::make_unique<TesseractOcr>();
+    if (m_tessOcr->init(tessExe.toStdString(), tessData.toStdString(), "chi_sim")) {
+        infof("[OcrMnager] Tesseract OK");
+    } else {
+        errorf("[OcrMnager] Tesseract 失败");
+    }
+
+    infof("[OcrMnager] 当前引擎: {}", engineName().toStdString());
 }
-static int index = 0;
+
+bool OcrMnager::isReady() const
+{
+    if (m_engine == EnginePaddleOCR)
+        return m_paddleOcr && m_paddleOcr->isReady();
+    else
+        return m_tessOcr && m_tessOcr->isReady();
+}
+
+void OcrMnager::setEngine(OcrEngine engine)
+{
+    if (m_engine != engine) {
+        m_engine = engine;
+        infof("[OcrMnager] 切换到: {}", engineName().toStdString());
+        emit engineChanged(engine);
+    }
+}
+
+QString OcrMnager::engineName() const
+{
+    return m_engine == EnginePaddleOCR ? "PaddleOCR" : "Tesseract";
+}
+
 QString OcrMnager::identify(cv::Mat &pic)
 {
-    Mat gray;
-    if (pic.empty())
-    {
-        //cout << "Could not open or find the image!" << endl;
-        return "";
-    }
-    if (pic.channels() == 4)
-    {
-        cvtColor(pic, gray, cv::COLOR_BGRA2GRAY);
-    }
-    else
-    {
-        cvtColor(pic, gray, cv::COLOR_BGR2GRAY);
-    }
-    Mat binary;
-    threshold(gray, binary, 105, 255, THRESH_BINARY);
-//    QString fineName = QString("binary_%1.png").arg(index);
-//    cv::imwrite(fineName.toStdString(), binary);
-    index++;
-    PIX* image = nullptr;
-    if (binary.channels() == 1)
-    {  // 灰度图
-        image = pixCreate(binary.cols, binary.rows, 8); // 8位深度
-        for (int y = 0; y < binary.rows; y++)
-        {
-            for (int x = 0; x < binary.cols; x++)
-            {
-                pixSetPixel(image, x, y, binary.at<uchar>(y, x));
-            }
+    if (m_engine == EnginePaddleOCR) {
+        if (!m_paddleOcr || !m_paddleOcr->isReady()) {
+            infof("[OcrMnager] PaddleOCR 未就绪");
+            return {};
         }
+        return m_paddleOcr->identify(pic);
+    } else {
+        if (!m_tessOcr || !m_tessOcr->isReady()) {
+            infof("[OcrMnager] Tesseract 未就绪");
+            return {};
+        }
+        return m_tessOcr->identify(pic);
     }
-    tess.SetImage(image);
-    char *text = tess.GetUTF8Text();
-    QString ocrResult = QString::fromUtf8(text);
-    pixDestroy(&image);
-    delete[] text;
-    return ocrResult;
 }

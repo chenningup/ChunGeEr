@@ -7,6 +7,7 @@
 #include "./WsManager/wsmanager.h"
 #include "service/dungeon/dungeonservice.h"
 #include "service/CatchMonsters/catchmonstersservice.h"
+#include "service/MainQuest/mainquestservice.h"
 #include "service/Record/record.h"
 #include "./KeyboardListener/keyboardlistener.h"
 #include "./Encode/encodingmanager.h"
@@ -363,6 +364,17 @@ void MainWindow::on_testButton_clicked()
     // ScreenCaptureManager::Instance().startCapture();
 }
 
+void MainWindow::on_ocrEngineCombo_currentIndexChanged(int index)
+{
+    if (index == 0) {
+        OcrMnager::Instance().setEngine(OcrMnager::EnginePaddleOCR);
+        ui->textEdit->append("[OCR] 切换到 PaddleOCR");
+    } else {
+        OcrMnager::Instance().setEngine(OcrMnager::EngineTesseract);
+        ui->textEdit->append("[OCR] 切换到 Tesseract");
+    }
+}
+
 void MainWindow::clientRecMegSlot(const json &msg)
 {
     if(msg.contains("cmd"))
@@ -500,6 +512,48 @@ void MainWindow::on_dungeonPushButton_clicked()
             mService->stopService();
         }
     }
+}
+
+void MainWindow::on_mainQuestButton_clicked()
+{
+    QObject *senderObj = sender();
+    QPushButton *clickedButton = qobject_cast<QPushButton*>(senderObj);
+    if (clickedButton->text() == "主线任务")
+    {
+        clickedButton->setText("结束");
+        if(mService)
+        {
+            mService->stopService();
+            mService->deleteLater();
+        }
+        MainQuestService *service = new MainQuestService();
+        service->startService();
+        ScreenCaptureManager::Instance().startCapture();
+        mService = service;
+    }
+    else if (clickedButton->text() == "结束")
+    {
+        clickedButton->setText("主线任务");
+        if(mService)
+        {
+            mService->stopService();
+        }
+        ScreenCaptureManager::Instance().stopCapture();
+    }
+}
+
+void MainWindow::startMainQuest()
+{
+    if(mService)
+    {
+        mService->stopService();
+        mService->deleteLater();
+    }
+    MainQuestService *service = new MainQuestService();
+    service->startService();
+    ScreenCaptureManager::Instance().startCapture();
+    mService = service;
+    ui->mainQuestButton->setText(QString::fromUtf8("结束"));
 }
 
 void MainWindow::receiveLog(const QString &str)

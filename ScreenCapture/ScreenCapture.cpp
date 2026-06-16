@@ -517,4 +517,13 @@ namespace ScreenCaptureCore
             return ErrorCode::UnknownError;
         }
     }
+} // namespace ScreenCaptureCore
+
+// ═══════════════════════════════════════════════════════════
+// C wrapper: 供外部 C/C++ 代码调用，不依赖 WinRT 头文件
+// ═══════════════════════════════════════════════════════════
+bool captureScreenToFile(const wchar_t* path)
+{
+    ScreenCaptureCore::ScreenCapture cap;
+    return cap.CaptureToFile(QString::fromWCharArray(path)) == ScreenCaptureCore::ErrorCode::Success;
 }

@@ -1,10 +1,9 @@
 #pragma once
 
-
+#include "pch.h"
 #include <string>
 #include <functional>
 #include <QString>
-#include "pch.h"
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Graphics::Capture;

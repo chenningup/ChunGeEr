@@ -95,6 +95,12 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Ocr/tesseractocr.h Ocr/tesseractocr.cpp
         Control/mouselabel.h Control/mouselabel.cpp
         Ui/screensharewidget.h Ui/screensharewidget.cpp Ui/screensharewidget.ui
+        Ui/gameitemcapturewidget.h Ui/gameitemcapturewidget.cpp
+        gameutils.h gameutils.cpp
+        gameslot.h gameslot.cpp
+        slotscheduler.h slotscheduler.cpp
+        autologin.h autologin.cpp
+        accountdialog.h accountdialog.cpp
         Commons/safepacket.cpp Commons/safepacket.h
         KeyboardListener/keyboardlistener.cpp KeyboardListener/keyboardlistener.h
         StorageVideo/storagevidoemanager.cpp StorageVideo/StorageVidoeManager.h
@@ -196,6 +202,9 @@ set_target_properties(ChunGeEr PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+# UAC 管理员权限
+target_link_options(ChunGeEr PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+
 include(GNUInstallDirs)
 install(TARGETS ChunGeEr
     BUNDLE DESTINATION .
@@ -206,3 +215,11 @@ install(TARGETS ChunGeEr
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(ChunGeEr)
 endif()
+
+# Post-build: 复制 images 目录到输出目录
+add_custom_command(TARGET ChunGeEr POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/../images"
+        "$<TARGET_FILE_DIR:ChunGeEr>/images"
+    COMMENT "Copying images directory to output..."
+)

@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <QList>
+#include <QHash>
 #include <opencv2/opencv.hpp>
 
 // ════════════════════════════════════════════════
@@ -69,6 +70,9 @@ private:
     cv::Mat cropROI(const cv::Mat &frame, const QRect &roi);
 
     QString m_templateRoot;
+    QHash<QString, cv::Mat> m_templateCache;
+    cv::Mat loadCachedTemplate(const QString &path);
+
     double m_matchThreshold = 0.6;
 
     // 固定裁剪区域

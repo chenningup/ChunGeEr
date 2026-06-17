@@ -5,8 +5,11 @@
 #include <QString>
 #include <QRect>
 #include <QStringList>
+#include <QHash>
 #include <opencv2/opencv.hpp>
 #include <windows.h>
+
+class BaseService;
 
 // ════════════════════════════════════════════
 // 一个游戏账号 = 一个 GameSlot
@@ -60,6 +63,11 @@ public:
     void setState(State s);
     QString stateText() const;
 
+    // ── 任务服务 ──
+    BaseService *service() const { return m_service; }
+    void setService(BaseService *svc) { m_service = svc; }
+    void stopService();
+
     // ── 检测刷新 ──
     void detectAll(const class cv::Mat &frame);
 
@@ -87,6 +95,11 @@ private:
     bool m_taskEnabled = true;
 
     State m_state = Idle;
+    BaseService *m_service = nullptr;
+
+    // ── 模板缓存 ──
+    QHash<QString, cv::Mat> m_templateCache;
+    cv::Mat loadTemplate(const QString &path);
 
     QString m_curMap;
     QString m_curQuest;

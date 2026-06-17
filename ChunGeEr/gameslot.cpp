@@ -1,4 +1,5 @@
 #include "gameslot.h"
+#include "service/baseservice.h"
 #include "gameutils.h"
 #include <QDebug>
 #include <QPixmap>
@@ -27,9 +28,8 @@ HWND GameSlot::findMatchingWindow(const cv::Mat &charNameROI)
     if (m_charName.isEmpty()) return nullptr;
 
     // 加载角色名模板
-    cv::Mat templ = cv::imread(
-        (GameUtils::Instance().templateRoot() + "/charnames/" + m_charName + ".png")
-        .toLocal8Bit().toStdString());
+    cv::Mat templ = loadTemplate(
+        GameUtils::Instance().templateRoot() + "/charnames/" + m_charName + ".png");
     if (templ.empty()) return nullptr;
 
     struct EnumCtx { QString name; cv::Mat templ; cv::Rect roi; HWND best; double bestVal; };
@@ -149,6 +149,26 @@ void GameSlot::setState(State s)
         m_state = s;
         emit stateChanged(m_index, s);
     }
+}
+
+void GameSlot::stopService()
+{
+    if (m_service) {
+        m_service->stopService();
+        m_service->deleteLater();
+        m_service = nullptr;
+    }
+}
+
+cv::Mat GameSlot::loadTemplate(const QString &path)
+{
+    auto it = m_templateCache.find(path);
+    if (it != m_templateCache.end())
+        return it.value();
+    cv::Mat templ = cv::imread(path.toLocal8Bit().toStdString());
+    if (!templ.empty())
+        m_templateCache.insert(path, templ);
+    return templ;
 }
 
 QString GameSlot::stateText() const

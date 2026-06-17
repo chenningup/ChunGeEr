@@ -7,6 +7,7 @@
 #include "service/baseservice.h"
 #include "Ui/screensharewidget.h"
 #include "Ui/gameitemcapturewidget.h"
+#include "autologin.h"
 using json =  nlohmann::json;
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -68,22 +69,29 @@ private:
     void removeActiveTask(int slotIndex);
     void startService();
     void stopService();
-    void startLauncherHandler();
-    void handleLauncherStep();
+
+    // ── 串行登录流程 ──
+    void beginLoginSequence();          // 开始依次登录
+    void loginNextSlot();               // 登录下一个窗口
+    void onLoginFinished(bool success);  // 单个窗口登录完成回调
+    void onAllLoginDone();              // 所有窗口登录完成，启动任务调度
 
     Ui::MainWindow *ui;
     ScreenShareWidget *screenShareUi;
     GameItemCaptureWidget *itemCaptureUi;
-    BaseService *mService;
     SlotScheduler *mScheduler;
     QCheckBox *m_slotChecks[3] = {};
     QWidget *m_activeTaskWidget = nullptr;
     QVBoxLayout *m_activeTaskLayout = nullptr;
     QHash<QString,HandelClientRecMegFun>clientRecHash;
     QHash<int, QWidget*> m_activeTaskRows;
-    QTimer *m_launcherTimer = nullptr;
-    int m_launcherStep = 0;
-    int m_launcherTicks = 0;
+
+    // ── 串行登录状态 ──
+    QList<int> m_loginQueue;            // 待登录窗口索引队列
+    int m_currentLoginIdx = -1;         // 当前正在登录的窗口
+    AutoLogin *m_currentLogin = nullptr; // 当前登录实例
+    QHash<int, AutoLogin*> m_autoLogins; // 每个窗口的 AutoLogin 实例
+    int m_loginSuccessCount = 0;
 };
 
 #endif // MAINWINDOW_H

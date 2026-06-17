@@ -16,7 +16,7 @@ void SlotScheduler::start()
     m_current = 0;
     if (auto *s = current()) {
         s->bringToFront();
-        s->setState(GameSlot::Running);
+        // 不在这里设 Running，由 MainWindow 登录完成后设置
     }
     emit started();
 }

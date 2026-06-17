@@ -26,6 +26,17 @@ cv::Mat GameUtils::cropROI(const cv::Mat &frame, const QRect &roi)
     return frame(sr).clone();
 }
 
+cv::Mat GameUtils::loadCachedTemplate(const QString &path)
+{
+    auto it = m_templateCache.find(path);
+    if (it != m_templateCache.end())
+        return it.value();
+    cv::Mat templ = cv::imread(path.toLocal8Bit().toStdString());
+    if (!templ.empty())
+        m_templateCache.insert(path, templ);
+    return templ;
+}
+
 // ════════════════════════════════════════════════
 // 通用最佳匹配
 // ════════════════════════════════════════════════
@@ -41,7 +52,7 @@ GameUtils::MatchResult GameUtils::bestMatch(const cv::Mat &frame, const QString 
 
     for (const QFileInfo &fi : files) {
         if (!nameFilter.isEmpty() && !fi.baseName().startsWith(nameFilter)) continue;
-        cv::Mat templ = cv::imread(fi.absoluteFilePath().toLocal8Bit().toStdString());
+        cv::Mat templ = loadCachedTemplate(fi.absoluteFilePath());
         if (templ.empty()) continue;
         if (templ.cols > frame.cols || templ.rows > frame.rows) continue;
 
@@ -101,22 +112,27 @@ QStringList GameUtils::detectSkills(const cv::Mat &frame)
     int slotCount = 8;
     int slotWidth = roi.cols / slotCount;
 
+    QDir dir(m_templateRoot + "/skills");
+    QStringList filters = {"*.png", "*.jpg", "*.bmp"};
+    QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+
+    // 预加载所有技能模板
+    QList<QPair<QString, cv::Mat>> templates;
+    for (const QFileInfo &fi : files) {
+        cv::Mat templ = loadCachedTemplate(fi.absoluteFilePath());
+        if (templ.empty()) continue;
+        templates.append({fi.baseName(), templ});
+    }
+
     for (int i = 0; i < slotCount; i++) {
         cv::Rect slot(i * slotWidth, 0, slotWidth, roi.rows);
         cv::Mat slotImg = roi(slot).clone();
 
-        // 对每个格子单独做模板匹配
-        QDir dir(m_templateRoot + "/skills");
-        QStringList filters = {"*.png", "*.jpg", "*.bmp"};
-        QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
-
         double bestVal = 0;
         QString bestName;
 
-        for (const QFileInfo &fi : files) {
-            cv::Mat templ = cv::imread(fi.absoluteFilePath().toLocal8Bit().toStdString());
-            if (templ.empty()) continue;
-            // resize template to slot size for fair comparison
+        for (const auto &tp : templates) {
+            cv::Mat templ = tp.second;
             if (templ.cols != slotWidth || templ.rows != roi.rows) {
                 cv::resize(templ, templ, cv::Size(slotWidth, roi.rows));
             }
@@ -127,7 +143,7 @@ QStringList GameUtils::detectSkills(const cv::Mat &frame)
             cv::minMaxLoc(result, nullptr, &v, nullptr, nullptr);
             if (v > bestVal && v >= m_matchThreshold) {
                 bestVal = v;
-                bestName = fi.baseName();
+                bestName = tp.first;
             }
         }
         skills.append(bestName.isEmpty() ? "?" : bestName);

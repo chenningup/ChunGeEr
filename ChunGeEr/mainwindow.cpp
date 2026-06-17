@@ -51,7 +51,6 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , screenShareUi(new ScreenShareWidget)
-    , mService(nullptr)
     , mScheduler(new SlotScheduler(this))
     , itemCaptureUi(nullptr)
 {
@@ -124,7 +123,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->startStopBtn->setParent(ca);
     ui->startStopBtn->setGeometry(664, 30, 50, 24);
-    connect(ui->startStopBtn, &QPushButton::clicked, this, &MainWindow::on_startStopBtn_clicked);
+    // connectSlotsByName 已自动连接 on_startStopBtn_clicked，不需要手动 connect
 
     // 外层 layout 比例 1:3
     auto *rootLayout = static_cast<QVBoxLayout *>(centralWidget()->layout());
@@ -158,20 +157,18 @@ void MainWindow::init()
 
 void MainWindow::HandelClientRecStartService(const json &msg)
 {
-    if(mService)
-    {
-        mService->stopService();
-    }
     std::string serviceName = msg["data"]["ServiceName"].get<std::string>();
     if(serviceName == "DungeonService")
     {
-        if(mService)
-        {
-            mService->stopService();
-            mService->deleteLater();
+        // 客户端模式：直接停所有 slot 的 service，启动新的
+        stopService();
+        auto *slot = mScheduler->slot(0); // 默认窗口0
+        if (slot) {
+            auto *svc = new ClientDungeonService();
+            svc->startService();
+            slot->setService(svc);
+            slot->setState(GameSlot::Running);
         }
-        ClientDungeonService *service = new ClientDungeonService();
-        service->startService();
     }
 }
 
@@ -494,12 +491,38 @@ void MainWindow::on_taskCombo_currentIndexChanged(int index)
 }
 
 // ════════════════════════════════════════════════
-// 启动/停止 & 启动器处理
+// 启动/停止 —— 串行登录流程
 // ════════════════════════════════════════════════
 void MainWindow::on_startStopBtn_clicked()
 {
-    ui->statuslabel->setText(QString::fromUtf8("启动中..."));
+    // 检查是否选了窗口
+    bool anyChecked = false;
+    for (int i = 0; i < 3; i++) {
+        if (m_slotChecks[i] && m_slotChecks[i]->isChecked()) { anyChecked = true; break; }
+    }
+    if (!anyChecked) {
+        QMessageBox::warning(this, QString::fromUtf8("提示"),
+            QString::fromUtf8("请先勾选要启动的窗口"));
+        return;
+    }
 
+    QSettings settings("config.ini", QSettings::IniFormat);
+    QString gamePath = settings.value("Accounts/GamePath").toString();
+    if (gamePath.isEmpty()) {
+        QMessageBox::warning(this, QString::fromUtf8("提示"),
+            QString::fromUtf8("请先在账号管理中设置游戏路径"));
+        return;
+    }
+
+    // 清理残留
+    for (int i = 0; i < 3; i++) {
+        auto *slot = mScheduler->slot(i);
+        if (slot && slot->state() == GameSlot::Idle && m_activeTaskRows.contains(i)) {
+            removeActiveTask(i);
+        }
+    }
+
+    // 记录任务配置（登录完成后使用）
     GameSlot::TaskType taskType = static_cast<GameSlot::TaskType>(ui->taskCombo->currentIndex());
     QString param;
     if (taskType == GameSlot::Dungeon) {
@@ -508,141 +531,108 @@ void MainWindow::on_startStopBtn_clicked()
         auto *spin = page->findChild<QSpinBox *>("dungeonCount");
         if (combo) param = combo->currentText() + " x" + QString::number(spin ? spin->value() : 1);
     }
-
-    QSettings settings("config.ini", QSettings::IniFormat);
-    QString gamePath = settings.value("Accounts/GamePath").toString();
-    bool launched = false;
-
     for (int i = 0; i < 3; i++) {
         if (!m_slotChecks[i] || !m_slotChecks[i]->isChecked()) continue;
-
         auto *slot = mScheduler->slot(i);
-        if (!slot) continue;
+        if (slot) slot->setTask(taskType, param);
+    }
 
-        if (m_activeTaskRows.contains(i)) {
-            QMessageBox::warning(this, QString::fromUtf8("提示"),
-                QString("窗口%1 已在运行中，请先停止").arg(QString::number(i + 1)));
-            continue;
-        }
+    ui->statuslabel->setText(QString::fromUtf8("开始登录..."));
+    beginLoginSequence();
+}
 
-        slot->setTask(taskType, param);
-        slot->setState(GameSlot::Running);
-        addActiveTask(i, slot->taskName());
+void MainWindow::beginLoginSequence()
+{
+    m_loginQueue.clear();
+    m_loginSuccessCount = 0;
 
-        if (!launched && !gamePath.isEmpty()) {
-            launched = true;
-            if (gamePath.endsWith(".lnk", Qt::CaseInsensitive)) {
-                ShellExecuteW(nullptr, L"open",
-                    reinterpret_cast<LPCWSTR>(gamePath.utf16()),
-                    nullptr, nullptr, SW_SHOWNORMAL);
-            } else if (QFileInfo::exists(gamePath)) {
-                SHELLEXECUTEINFOW sei = {sizeof(sei)};
-                sei.lpVerb = L"runas";
-                sei.lpFile = reinterpret_cast<LPCWSTR>(gamePath.utf16());
-                sei.lpDirectory = reinterpret_cast<LPCWSTR>(
-                    QFileInfo(gamePath).absolutePath().utf16());
-                sei.nShow = SW_SHOWNORMAL;
-                ShellExecuteExW(&sei);
+    // 收集勾选的窗口，按顺序排队
+    for (int i = 0; i < 3; i++) {
+        if (m_slotChecks[i] && m_slotChecks[i]->isChecked()) {
+            auto *slot = mScheduler->slot(i);
+            if (slot && slot->state() != GameSlot::Running && slot->state() != GameSlot::Searching) {
+                m_loginQueue.append(i);
             }
         }
     }
 
-    if (launched) {
-        startLauncherHandler();
-    }
-}
-
-void MainWindow::startLauncherHandler()
-{
-    m_launcherStep = 0;
-    m_launcherTicks = 0;
-    if (!m_launcherTimer) {
-        m_launcherTimer = new QTimer(this);
-        connect(m_launcherTimer, &QTimer::timeout, this, &MainWindow::handleLauncherStep);
-    }
-    m_launcherTimer->start(2000);
-    ui->statuslabel->setText(QString::fromUtf8("等待启动器..."));
-}
-
-void MainWindow::handleLauncherStep()
-{
-    m_launcherTicks++;
-    if (m_launcherTicks > 30) {
-        m_launcherTimer->stop();
-        ui->statuslabel->setText(QString::fromUtf8("启动器超时"));
+    if (m_loginQueue.isEmpty()) {
+        ui->statuslabel->setText(QString::fromUtf8("没有需要登录的窗口"));
         return;
     }
 
-    QScreen *screen = QGuiApplication::primaryScreen();
-    if (!screen) return;
-    QImage img = screen->grabWindow(0).toImage().convertToFormat(QImage::Format_BGR888);
-    cv::Mat frame(img.height(), img.width(), CV_8UC3, const_cast<uchar*>(img.bits()), img.bytesPerLine());
-    frame = frame.clone();
+    loginNextSlot();
+}
 
-    auto &gu = GameUtils::Instance();
-    QString loginDir = gu.templateRoot() + "/login";
-    auto &km = MouseKeyboardManager::Instance();
+void MainWindow::loginNextSlot()
+{
+    if (m_loginQueue.isEmpty()) {
+        onAllLoginDone();
+        return;
+    }
 
-    switch (m_launcherStep) {
-    case 0:
-    {
-        HWND hwnd = FindWindowW(nullptr, L"大唐无双");
-        if (!hwnd) hwnd = FindWindowW(L"Qt5152QWindowIcon", nullptr);
-        if (hwnd) {
-            SetForegroundWindow(hwnd);
-            m_launcherStep = 1;
-            m_launcherTicks = 0;
-        }
-        break;
+    m_currentLoginIdx = m_loginQueue.takeFirst();
+    auto *slot = mScheduler->slot(m_currentLoginIdx);
+    if (!slot) {
+        loginNextSlot();
+        return;
     }
-    case 1:
-    {
-        auto match = gu.bestMatch(frame, loginDir, "update_btn");
-        if (match.confidence > 0.7) {
-            km.humanMouseMove(match.centerX, match.centerY);
-            QThread::msleep(100);
-            km.mouseClick();
-            ui->statuslabel->setText(QString::fromUtf8("正在更新..."));
-            m_launcherStep = 2;
-            m_launcherTicks = 0;
-        } else {
-            m_launcherStep = 2;
-            m_launcherTicks = 0;
-        }
-        break;
+
+    QSettings settings("config.ini", QSettings::IniFormat);
+    QString gamePath = settings.value("Accounts/GamePath").toString();
+
+    // 创建 AutoLogin 实例
+    m_currentLogin = new AutoLogin(slot, this);
+    m_autoLogins.insert(m_currentLoginIdx, m_currentLogin);
+
+    connect(m_currentLogin, &AutoLogin::finished, this, &MainWindow::onLoginFinished);
+    connect(m_currentLogin, &AutoLogin::statusMessage, this, [this](const QString &msg) {
+        ui->statuslabel->setText(msg);
+        ui->textEdit->append(msg);
+    });
+
+    slot->setState(GameSlot::Searching);
+    addActiveTask(m_currentLoginIdx, QString::fromUtf8("登录中"));
+    ui->statuslabel->setText(QString::fromUtf8("窗口%1 登录中...").arg(m_currentLoginIdx + 1));
+
+    m_currentLogin->start(gamePath);
+}
+
+void MainWindow::onLoginFinished(bool success)
+{
+    int idx = m_currentLoginIdx;
+    auto *slot = mScheduler->slot(idx);
+
+    if (success) {
+        m_loginSuccessCount++;
+        slot->setState(GameSlot::Running);
+        removeActiveTask(idx);
+        addActiveTask(idx, slot->taskName());
+        ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功").arg(idx + 1));
+    } else {
+        slot->setState(GameSlot::Idle);
+        removeActiveTask(idx);
+        ui->textEdit->append(QString::fromUtf8("窗口%1 登录失败").arg(idx + 1));
     }
-    case 2:
-    {
-        auto updateMatch = gu.bestMatch(frame, loginDir, "update_btn");
-        if (updateMatch.confidence > 0.7) {
-            km.humanMouseMove(updateMatch.centerX, updateMatch.centerY);
-            QThread::msleep(100);
-            km.mouseClick();
-            m_launcherTicks = 0;
-            break;
-        }
-        auto match = gu.bestMatch(frame, loginDir, "enter_game_btn");
-        if (match.confidence > 0.7) {
-            km.humanMouseMove(match.centerX, match.centerY);
-            QThread::msleep(100);
-            km.mouseClick();
-            ui->statuslabel->setText(QString::fromUtf8("进入游戏..."));
-            m_launcherStep = 3;
-            m_launcherTicks = 0;
-        }
-        break;
+
+    // 继续登录下一个
+    m_currentLogin = nullptr;
+    m_currentLoginIdx = -1;
+    loginNextSlot();
+}
+
+void MainWindow::onAllLoginDone()
+{
+    if (m_loginSuccessCount == 0) {
+        ui->statuslabel->setText(QString::fromUtf8("所有窗口登录失败"));
+        return;
     }
-    case 3:
-    {
-        HWND hwnd = FindWindowW(nullptr, L"大唐无双");
-        if (!hwnd) hwnd = FindWindowW(L"Qt5152QWindowIcon", nullptr);
-        if (hwnd) {
-            m_launcherTimer->stop();
-            startService();
-        }
-        break;
-    }
-    }
+
+    ui->statuslabel->setText(QString::fromUtf8("登录完成，启动任务调度..."));
+    ui->textEdit->append(QString::fromUtf8("%1/%2 窗口登录成功，开始任务").arg(m_loginSuccessCount).arg(m_loginSuccessCount + (3 - m_loginQueue.size() - m_loginSuccessCount)));
+
+    // 启动 SlotScheduler 轮询调度
+    startService();
 }
 
 // ════════════════════════════════════════════════
@@ -667,12 +657,17 @@ void MainWindow::setupAccountUI()
         dlg.exec();
     });
 
-    // 活动任务区（挂在 configArea 下方，也在 rootLayout 中）
-    m_activeTaskWidget = new QWidget(ca);
-    m_activeTaskWidget->setGeometry(0, 50, ca->width(), 120);
+    // 活动任务区（插入到 rootLayout 中 configArea 和 textEdit 之间）
+    m_activeTaskWidget = new QWidget(this->centralWidget());
+    m_activeTaskWidget->setMinimumHeight(80);
     m_activeTaskLayout = new QVBoxLayout(m_activeTaskWidget);
     m_activeTaskLayout->setContentsMargins(4, 1, 4, 1);
     m_activeTaskLayout->setSpacing(1);
+
+    auto *rootLayout = qobject_cast<QVBoxLayout*>(this->centralWidget()->layout());
+    if (rootLayout) {
+        rootLayout->insertWidget(1, m_activeTaskWidget);
+    }
 }
 
 void MainWindow::loadAccountCombo()
@@ -712,8 +707,12 @@ void MainWindow::addActiveTask(int slotIdx, const QString &taskName)
     stopBtn->setFixedSize(40, 22);
     int idx = slotIdx;
     connect(stopBtn, &QPushButton::clicked, this, [this, idx]() {
+        auto *slot = mScheduler->slot(idx);
+        if (slot) {
+            slot->stopService();
+            slot->setState(GameSlot::Idle);
+        }
         removeActiveTask(idx);
-        mScheduler->slot(idx)->setState(GameSlot::Idle);
     });
     lay->addWidget(stopBtn);
 
@@ -732,50 +731,60 @@ void MainWindow::removeActiveTask(int slotIdx)
 }
 
 // ════════════════════════════════════════════════
-// 服务启动/停止
+// 服务启动/停止（每个 slot 独立 service）
 // ════════════════════════════════════════════════
 void MainWindow::startService()
 {
-    if (mService) {
-        mService->stopService();
-        mService->deleteLater();
-        mService = nullptr;
+    for (int i = 0; i < 3; i++) {
+        auto *slot = mScheduler->slot(i);
+        if (!slot || slot->state() != GameSlot::Running) continue;
+        if (!slot->isLoggedIn()) continue;
+
+        // 每个窗口根据任务类型创建独立 Service
+        BaseService *svc = nullptr;
+        switch (slot->taskType()) {
+        case GameSlot::Dungeon:
+            svc = new ClientDungeonService();
+            break;
+        case GameSlot::MainQuest:
+            svc = new MainQuestService();
+            break;
+        default:
+            break;
+        }
+
+        if (svc) {
+            slot->setService(svc);
+            svc->start();
+        }
     }
 
-    int idx = ui->taskCombo->currentIndex();
-    switch (idx) {
-    case 0: // 副本
-        mService = new ClientDungeonService();
-        break;
-    case 1: // 主线
-        mService = new MainQuestService();
-        break;
-    case 2: // 冒险
-    case 3: // 一条龙
-        mService = nullptr; // TODO
-        break;
-    }
-
-    if (mService) {
-        mService->start();
-        ui->statuslabel->setText(QString::fromUtf8("运行中"));
-    }
+    mScheduler->start();
+    ui->statuslabel->setText(QString::fromUtf8("运行中"));
 }
 
 void MainWindow::stopService()
 {
-    if (mService) {
-        mService->stopService();
-        mService->deleteLater();
-        mService = nullptr;
+    for (int i = 0; i < 3; i++) {
+        auto *slot = mScheduler->slot(i);
+        if (slot) {
+            slot->stopService();
+            slot->setState(GameSlot::Idle);
+        }
     }
+    mScheduler->stop();
     ui->statuslabel->setText(QString::fromUtf8("就绪"));
 }
 
 void MainWindow::startMainQuest()
 {
-    mService = new MainQuestService();
-    mService->start();
+    auto *slot = mScheduler->slot(0);
+    if (slot) {
+        auto *svc = new MainQuestService();
+        svc->start();
+        slot->setService(svc);
+        slot->setState(GameSlot::Running);
+    }
 }
 
 void MainWindow::openItemCapture()

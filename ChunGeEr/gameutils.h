@@ -47,6 +47,14 @@ public:
     void setSkillsROI(const QRect &r) { m_roiSkills = r; }
     QRect skillsROI() const { return m_roiSkills; }
 
+    // 掉线提示区域
+    void setDisconnectROI(const QRect &r) { m_roiDisconnect = r; }
+    QRect disconnectROI() const { return m_roiDisconnect; }
+
+    // 停止运动/卡住检测区域
+    void setStoppedROI(const QRect &r) { m_roiStopped = r; }
+    QRect stoppedROI() const { return m_roiStopped; }
+
     /// ── 检测接口 ──
 
     // 当前地图（模板匹配 locations/），未匹配到返回空
@@ -60,6 +68,12 @@ public:
 
     // 技能栏（分格模板匹配 skills/），8个格子
     QStringList detectSkills(const cv::Mat &frame);
+
+    // 是否掉线（模板匹配 disconnect/），匹配到说明掉线了
+    bool isDisconnected(const cv::Mat &frame);
+
+    // 是否停止运动/卡住（模板匹配 stopped/），匹配到说明角色没在动
+    bool isStopped(const cv::Mat &frame);
 
     // 通用（给AutoLogin等内部用）
     QString templateRoot() const { return m_templateRoot; }
@@ -80,6 +94,8 @@ private:
     QRect m_roiLevel;
     QRect m_roiMainQuest;
     QRect m_roiSkills;
+    QRect m_roiDisconnect;
+    QRect m_roiStopped;
 };
 
 #endif // GAMEUTILS_H

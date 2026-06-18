@@ -9,6 +9,7 @@
 #include <QLineEdit>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QComboBox>
 #include <QHash>
 #include <opencv2/opencv.hpp>
 #include <windows.h>
@@ -72,6 +73,7 @@ private:
     QTimer          *m_captureTimer;
     CaptureImageLabel *m_imageLabel;
     QTreeWidget     *m_itemTree;
+    QComboBox       *m_windowCombo;
     QPushButton     *m_pauseBtn;
     QPushButton     *m_screenshotBtn;
     QPushButton     *m_testBtn;

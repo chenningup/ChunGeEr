@@ -18,10 +18,11 @@
 static const QStringList kCatCN = {
     QString::fromUtf8("物品"), QString::fromUtf8("技能"),
     QString::fromUtf8("地点"), QString::fromUtf8("任务"),
-    QString::fromUtf8("弹窗"), QString::fromUtf8("角色")
+    QString::fromUtf8("弹窗"), QString::fromUtf8("角色"),
+    QString::fromUtf8("启动")
 };
 static const QStringList kCatEN = {
-    "items", "skills", "locations", "quests", "popups", "roles"
+    "items", "skills", "locations", "quests", "popups", "roles", "login"
 };
 static QString catCN2EN(const QString &cn) {
     int i = kCatCN.indexOf(cn);
@@ -114,6 +115,11 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     // ════════════════════════════════════════
     auto *topLayout = new QHBoxLayout();
 
+    m_windowCombo = new QComboBox(this);
+    m_windowCombo->addItem(QString::fromUtf8("🎮 游戏窗口"));
+    m_windowCombo->addItem(QString::fromUtf8("🚀 启动器"));
+    m_windowCombo->setMinimumWidth(120);
+
     m_pauseBtn = new QPushButton(QString::fromUtf8("⏸ 暂停"), this);
     m_screenshotBtn = new QPushButton(QString::fromUtf8("📷 截图"), this);
     m_testBtn = new QPushButton(QString::fromUtf8("🔍 测试匹配"), this);
@@ -127,6 +133,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     m_screenshotBtn->setEnabled(false);
     m_ocrBtn->setEnabled(false);
 
+    topLayout->addWidget(m_windowCombo);
     topLayout->addWidget(m_pauseBtn);
     topLayout->addWidget(m_screenshotBtn);
     topLayout->addWidget(m_testBtn);
@@ -188,17 +195,31 @@ GameItemCaptureWidget::~GameItemCaptureWidget()
 }
 
 // ════════════════════════════════════════════════
-// 找游戏窗口
+// 找目标窗口：根据下拉框选择启动器或游戏窗口
 // ════════════════════════════════════════════════
 HWND GameItemCaptureWidget::findGameWindow()
 {
-    HWND hwnd = FindWindowW(nullptr, L"大唐无双公测 - 七侠五义 (4.0.58:1041281  1.0.5:1039767)");
+    bool wantLauncher = (m_windowCombo && m_windowCombo->currentIndex() == 1);
+
+    if (wantLauncher) {
+        // 启动器：Qt5152QWindowIcon 类，标题含"大唐无双"
+        HWND hwnd = FindWindowW(L"Qt5152QWindowIcon", nullptr);
+        if (hwnd) {
+            wchar_t title[256];
+            GetWindowTextW(hwnd, title, 256);
+            if (wcsstr(title, L"\u5927\u5510") || wcsstr(title, L"\u65e0\u53cc")) return hwnd;
+        }
+        return hwnd;
+    }
+
+    // 游戏窗口：标题精确/模糊匹配"大唐无双"
+    HWND hwnd = FindWindowW(nullptr, L"\u5927\u5510\u65e0\u53cc\u516c\u6d4b - \u4e03\u4fa0\u4e94\u4e49 (4.0.58:1041281  1.0.5:1039767)");
     if (hwnd) return hwnd;
     HWND h = FindWindowW(nullptr, nullptr);
     while (h) {
         wchar_t title[256];
         GetWindowTextW(h, title, 256);
-        if (wcsstr(title, L"大唐无双")) return h;
+        if (wcsstr(title, L"\u5927\u5510\u65e0\u53cc")) return h;
         h = GetWindow(h, GW_HWNDNEXT);
     }
     return nullptr;

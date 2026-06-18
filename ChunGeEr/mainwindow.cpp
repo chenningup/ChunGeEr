@@ -69,6 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
     DetectorManager::Instance().init("best.onnx","data.yaml");
     OcrMnager::Instance().init();
     OcrMnager::Instance().setEngine(OcrMnager::EngineTesseract);
+    GameUtils::Instance().setTemplateRoot(QCoreApplication::applicationDirPath() + "/images");
     init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::serverRecMeg,this,&MainWindow::serverRecMegSlot,Qt::QueuedConnection);
@@ -495,6 +496,38 @@ void MainWindow::on_taskCombo_currentIndexChanged(int index)
 // ════════════════════════════════════════════════
 void MainWindow::on_startStopBtn_clicked()
 {
+    // ── 如果正在登录，取消 ──
+    if (m_currentLogin || !m_loginQueue.isEmpty()) {
+        // 先清队列，再 cancel（cancel会触发onLoginFinished→loginNextSlot）
+        m_loginQueue.clear();
+        m_currentLoginIdx = -1;
+        if (m_currentLogin) {
+            m_currentLogin->cancel();
+        }
+        // 清所有 autoLogin（除了已被cancel清理的）
+        for (auto it = m_autoLogins.begin(); it != m_autoLogins.end(); ++it) {
+            if (it.value()) {
+                it.value()->cancel();
+                it.value()->deleteLater();
+            }
+        }
+        m_autoLogins.clear();
+        m_currentLogin = nullptr;
+        m_loginSuccessCount = 0;
+
+        // 清理所有活跃任务行
+        for (auto it = m_activeTaskRows.begin(); it != m_activeTaskRows.end(); ++it) {
+            int idx = it.key();
+            if (mScheduler->slot(idx))
+                mScheduler->slot(idx)->setState(GameSlot::Idle);
+        }
+        m_activeTaskRows.clear();
+
+        ui->statuslabel->setText(QString::fromUtf8("已停止"));
+        ui->textEdit->append(QString::fromUtf8("登录已取消"));
+        return;
+    }
+
     // 检查是否选了窗口
     bool anyChecked = false;
     for (int i = 0; i < 3; i++) {
@@ -601,18 +634,22 @@ void MainWindow::loginNextSlot()
 void MainWindow::onLoginFinished(bool success)
 {
     int idx = m_currentLoginIdx;
-    auto *slot = mScheduler->slot(idx);
+    auto *slot = (idx >= 0) ? mScheduler->slot(idx) : nullptr;
 
-    if (success) {
-        m_loginSuccessCount++;
-        slot->setState(GameSlot::Running);
-        removeActiveTask(idx);
-        addActiveTask(idx, slot->taskName());
-        ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功").arg(idx + 1));
+    if (slot) {
+        if (success) {
+            m_loginSuccessCount++;
+            slot->setState(GameSlot::Running);
+            removeActiveTask(idx);
+            addActiveTask(idx, slot->taskName());
+            ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功").arg(idx + 1));
+        } else {
+            slot->setState(GameSlot::Idle);
+            removeActiveTask(idx);
+            ui->textEdit->append(QString::fromUtf8("窗口%1 登录失败").arg(idx + 1));
+        }
     } else {
-        slot->setState(GameSlot::Idle);
-        removeActiveTask(idx);
-        ui->textEdit->append(QString::fromUtf8("窗口%1 登录失败").arg(idx + 1));
+        ui->textEdit->append(QString::fromUtf8("登录已取消"));
     }
 
     // 继续登录下一个

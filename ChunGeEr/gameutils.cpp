@@ -1,5 +1,6 @@
 #include "gameutils.h"
 #include "Ocr/ocrmnager.h"
+#include "XuLog.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -45,16 +46,32 @@ GameUtils::MatchResult GameUtils::bestMatch(const cv::Mat &frame, const QString 
     MatchResult best;
     best.confidence = 0;
     QDir dir(templateDir);
-    if (!dir.exists() || frame.empty()) return best;
+    if (!dir.exists()) {
+        infof("[GU] bestMatch: dir NOT exist {}", templateDir.toStdString());
+        return best;
+    }
+    if (frame.empty()) {
+        infof("[GU] bestMatch: frame EMPTY");
+        return best;
+    }
 
     QStringList filters = {"*.png", "*.jpg", "*.bmp"};
     QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+    infof("[GU] bestMatch: dir={} filter={} files={} frame={}x{}",
+          templateDir.toStdString(), nameFilter.toStdString(), files.size(), frame.cols, frame.rows);
 
     for (const QFileInfo &fi : files) {
         if (!nameFilter.isEmpty() && !fi.baseName().startsWith(nameFilter)) continue;
         cv::Mat templ = loadCachedTemplate(fi.absoluteFilePath());
-        if (templ.empty()) continue;
-        if (templ.cols > frame.cols || templ.rows > frame.rows) continue;
+        if (templ.empty()) {
+            infof("[GU]   load FAILED {}", fi.baseName().toStdString());
+            continue;
+        }
+        if (templ.cols > frame.cols || templ.rows > frame.rows) {
+            infof("[GU]   too big {} ({}x{}) > frame ({}x{})",
+                  fi.baseName().toStdString(), templ.cols, templ.rows, frame.cols, frame.rows);
+            continue;
+        }
 
         cv::Mat result;
         cv::matchTemplate(frame, templ, result, cv::TM_CCOEFF_NORMED);
@@ -63,6 +80,9 @@ GameUtils::MatchResult GameUtils::bestMatch(const cv::Mat &frame, const QString 
         cv::Point maxLoc;
         cv::minMaxLoc(result, nullptr, &maxVal, nullptr, &maxLoc);
 
+        infof("[GU]   {} conf={:.3f} at=({},{}) templ={}x{}",
+              fi.baseName().toStdString(), maxVal, maxLoc.x, maxLoc.y, templ.cols, templ.rows);
+
         if (maxVal > best.confidence && maxVal >= m_matchThreshold) {
             best.name = fi.baseName();
             best.confidence = maxVal;
@@ -70,6 +90,8 @@ GameUtils::MatchResult GameUtils::bestMatch(const cv::Mat &frame, const QString 
             best.centerY = maxLoc.y + templ.rows / 2;
         }
     }
+    infof("[GU] bestMatch result: name={} conf={:.3f} center=({},{})",
+          best.name.toStdString(), best.confidence, best.centerX, best.centerY);
     return best;
 }
 

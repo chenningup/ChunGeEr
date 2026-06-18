@@ -13,8 +13,6 @@
 #pragma comment(lib, "imm32.lib")
 static QHash<int,int>keyHash ={
     {192,189},
-    {121,0xCB},
-    {122,0xCC},
 };
 static uint16_t crc_16(uint8_t *data, uint16_t len)
 {
@@ -149,7 +147,7 @@ void MouseKeyboardManager::clickButton(const QString &button)
         key[5+i] =( unsigned char)ba.at(i);
     }
     uint16_t crc= crc_16(&key[3],button.size() + 2);
-    memcpy(&key[4+button.size()],&crc,sizeof(uint16_t));
+    memcpy(&key[5+button.size()],&crc,sizeof(uint16_t));
     key[5+button.size() + 2] = 0x5B;
     key[5+button.size() + 3] = 0x81;
     qDebug()<<"write";
@@ -166,7 +164,7 @@ void MouseKeyboardManager::clickButton(int button)
 
 void MouseKeyboardManager::humanMouseMove(int endX, int endY)
 {
-    QThread::sleep(2);
+    QThread::msleep(100);
     QPoint current = QCursor::pos();
     double distance = sqrt(pow(endX - current.x(), 2) + pow(endY - current.y(), 2));
     int steps = static_cast<int>(distance * 0.30); // 减少步数比例提高速度

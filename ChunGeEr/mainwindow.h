@@ -21,6 +21,8 @@ class QLabel;
 class QLineEdit;
 class QVBoxLayout;
 class QWidget;
+class QGroupBox;
+class QSpinBox;
 
 typedef std::function<void(const json &data)> HandelClientRecMegFun;
 class MainWindow : public QMainWindow
@@ -61,14 +63,24 @@ private slots:
 
     void receiveLog(const QString &str);
 
+    void on_loginBtn_clicked();
+    void on_singleLoginBtn_clicked(int idx);
+    void on_startAllBtn_clicked();
+    void on_accountStartBtn_clicked(int idx);
+    void on_unifiedTaskChanged(int index);
+    void on_accountComboChanged(int idx);
+
 private:
     void setupTaskConfigs();
-    void setupAccountUI();
+    void setupAccountTaskUI();
+    void buildTaskPanel();
+    void refreshTaskPanel();
     void loadAccountCombo();
     void addActiveTask(int slotIndex, const QString &taskName);
     void removeActiveTask(int slotIndex);
     void startService();
     void stopService();
+    void startSingleTask(int slotIdx);
 
     // ── 串行登录流程 ──
     void beginLoginSequence();          // 开始依次登录
@@ -80,7 +92,6 @@ private:
     ScreenShareWidget *screenShareUi;
     GameItemCaptureWidget *itemCaptureUi;
     SlotScheduler *mScheduler;
-    QCheckBox *m_slotChecks[3] = {};
     QWidget *m_activeTaskWidget = nullptr;
     QVBoxLayout *m_activeTaskLayout = nullptr;
     QHash<QString,HandelClientRecMegFun>clientRecHash;
@@ -92,6 +103,28 @@ private:
     AutoLogin *m_currentLogin = nullptr; // 当前登录实例
     QHash<int, AutoLogin*> m_autoLogins; // 每个窗口的 AutoLogin 实例
     int m_loginSuccessCount = 0;
+
+    // ── 模式切换 ──
+    QStackedWidget *m_modeStack = nullptr;
+    QPushButton *m_accountModeBtn = nullptr;
+    QPushButton *m_taskModeBtn = nullptr;
+
+    // ── 账号面板 ──
+    QLabel *m_statusLabels[3] = {};      // 登录状态标签
+    QComboBox *m_accountCombos[3] = {};   // 账号选择下拉
+    QPushButton *m_loginBtns[3] = {};    // 单个账号[登录]按钮
+
+    // ── 任务面板 ──
+    QGroupBox *m_taskPanel = nullptr;
+    QVBoxLayout *m_taskPanelLayout = nullptr;
+    QWidget *m_taskRowsWidget = nullptr;
+    QVBoxLayout *m_taskRowsLayout = nullptr;
+    QComboBox *m_unifiedTaskCombo = nullptr;
+    QComboBox *m_taskDungeonCombo = nullptr;
+    QSpinBox *m_dungeonSpin = nullptr;
+    QPushButton *m_startAllBtn = nullptr;
+    QComboBox *m_accountTaskCombos[3] = {};
+    QPushButton *m_accountStartBtns[3] = {};
 };
 
 #endif // MAINWINDOW_H

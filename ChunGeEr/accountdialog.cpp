@@ -1,4 +1,5 @@
 ﻿#include "accountdialog.h"
+#include <QCoreApplication>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -91,7 +92,7 @@ AccountDialog::AccountDialog(QWidget *parent)
 
 void AccountDialog::load()
 {
-    QSettings settings("config.ini", QSettings::IniFormat);
+    QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
 
     // 游戏路径
     QString gamePath = settings.value("Accounts/GamePath").toString();
@@ -99,17 +100,17 @@ void AccountDialog::load()
     m_gamePathLabel->setText(gamePath.isEmpty() ? QString::fromUtf8("(未找到)") : gamePath);
     QDir().mkpath("images/roles");
 
-    // 账号
+    // 账号 （config.ini 用 Slot0/Account 扁平 key，非嵌套 section）
     for (int i = 0; i < 3; i++) {
-        QString prefix = QString("Accounts/Slot%1/").arg(i);
-        m_charPaths[i] = settings.value(prefix + "CharImage").toString();
+        QString slotKey = QString("Slot%1").arg(i);
+        m_charPaths[i] = settings.value("Accounts/" + slotKey + "/CharImage").toString();
         if (m_charPaths[i].isEmpty()) {
             QString defaultPath = QDir("images/roles").absoluteFilePath(
-                settings.value(prefix + "CharName").toString() + ".png");
+                settings.value("Accounts/" + slotKey + "/CharName").toString() + ".png");
             if (QFileInfo::exists(defaultPath)) m_charPaths[i] = defaultPath;
         }
-        m_accEdits[i]->setText(settings.value(prefix + "Account").toString());
-        m_pwdEdits[i]->setText(settings.value(prefix + "Password").toString());
+        m_accEdits[i]->setText(settings.value("Accounts/" + slotKey + "/Account").toString());
+        m_pwdEdits[i]->setText(settings.value("Accounts/" + slotKey + "/Password").toString());
 
         // 预览
         QString defRole = QDir("images/roles").absoluteFilePath(m_accEdits[i]->text() + ".png");
@@ -127,17 +128,17 @@ void AccountDialog::load()
 
 void AccountDialog::save()
 {
-    QSettings settings("config.ini", QSettings::IniFormat);
+    QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
 
     QString gamePath = m_gamePathLabel->text();
     if (gamePath != QString::fromUtf8("(未找到)") && gamePath != QString::fromUtf8("(自动查找)"))
         settings.setValue("Accounts/GamePath", gamePath);
 
     for (int i = 0; i < 3; i++) {
-        QString prefix = QString("Accounts/Slot%1/").arg(i);
-        settings.setValue(prefix + "CharImage", m_charPaths[i]);
-        settings.setValue(prefix + "Account", m_accEdits[i]->text());
-        settings.setValue(prefix + "Password", m_pwdEdits[i]->text());
+        QString slotKey = QString("Slot%1").arg(i);
+        settings.setValue("Accounts/" + slotKey + "/CharImage", m_charPaths[i]);
+        settings.setValue("Accounts/" + slotKey + "/Account", m_accEdits[i]->text());
+        settings.setValue("Accounts/" + slotKey + "/Password", m_pwdEdits[i]->text());
     }
     emit accountsChanged();
     accept();

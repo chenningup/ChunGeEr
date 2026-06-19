@@ -623,13 +623,9 @@ void AutoLogin::processState()
         }
 
         cv::Mat frame = screenToMat();
-        // 空帧不消耗重试（游戏中加载/黑屏时 D3D11 可能截不到）
-        if (frame.empty()) {
-            return;
-        }
+        if (frame.empty()) return;
 
         auto &gu = GameUtils::Instance();
-
         auto locMatch = gu.detectLocation(frame);
         bool hasLocation = !locMatch.name.isEmpty() && locMatch.confidence > 0.6;
 
@@ -643,8 +639,6 @@ void AutoLogin::processState()
             emit finished(true);
             return;
         }
-
-        break;
     }
 
     default:

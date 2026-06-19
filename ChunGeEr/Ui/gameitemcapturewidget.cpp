@@ -20,10 +20,10 @@ static const QStringList kCatCN = {
     QString::fromUtf8("物品"), QString::fromUtf8("技能"),
     QString::fromUtf8("地点"), QString::fromUtf8("任务"),
     QString::fromUtf8("弹窗"), QString::fromUtf8("角色"),
-    QString::fromUtf8("启动")
+    QString::fromUtf8("启动"), QString::fromUtf8("等级")
 };
 static const QStringList kCatEN = {
-    "items", "skills", "locations", "quests", "popups", "roles", "login"
+    "items", "skills", "locations", "quests", "popups", "roles", "login", "levels"
 };
 static QString catCN2EN(const QString &cn) {
     int i = kCatCN.indexOf(cn);

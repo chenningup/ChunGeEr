@@ -16,7 +16,7 @@ class GameSlot;
 enum class LoginPhase {
     Idle,
     LaunchGame,         // 启动游戏EXE
-    WaitLauncher,       // 等启动器窗口 (Qt5152QWindowIcon)
+    WaitLauncher,       // 等启动器窗口 (无双启动器)
     ClickStartGame,     // 检测并点击启动器"开始游戏"按钮
     WaitGameWindow,     // 等游戏客户端窗口出现
     WaitLoading,        // 等游戏加载完成（画面变化）
@@ -27,6 +27,8 @@ enum class LoginPhase {
     WaitServerSelect,   // 等服务器选择界面
     ConfirmServer,      // 确认服务器
     WaitCharSelect,     // 等角色选择界面
+    CharSelect,         // 选择已有角色 → 进入游戏
+    CharCreate,         // 创建新角色 → 选门派/输名字/确认
     EnterGame,          // 点击进入游戏
     VerifyInGame,       // 验证已进入游戏
     Done,
@@ -76,6 +78,7 @@ private:
     LoginPhase m_phase = LoginPhase::Idle;
     int        m_retryCount = 0;
     int        m_phaseTicks = 0;
+    int        m_charCreateStep = 0; // CharCreate 子阶段
     HWND       m_launcherHwnd = nullptr;
     HWND       m_gameHwnd = nullptr;
 

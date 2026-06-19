@@ -6,7 +6,6 @@
 #include <QGroupBox>
 #include <QPushButton>
 #include <QFileDialog>
-#include <QPixmap>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -16,7 +15,7 @@ AccountDialog::AccountDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(QString::fromUtf8("账号管理"));
-    setMinimumWidth(500);
+    setMinimumWidth(560);
 
     auto *root = new QVBoxLayout(this);
 
@@ -27,8 +26,7 @@ AccountDialog::AccountDialog(QWidget *parent)
     m_gamePathLabel->setStyleSheet("color:#888;");
     auto *browseBtn = new QPushButton(QString::fromUtf8("浏览..."));
     connect(browseBtn, &QPushButton::clicked, this, [this]() {
-        QDir().mkpath("images/roles");
-    QString path = QFileDialog::getOpenFileName(this,
+        QString path = QFileDialog::getOpenFileName(this,
             QString::fromUtf8("选择游戏程序"), "",
             QString::fromUtf8("可执行文件 (*.exe);;所有文件 (*)"));
         if (!path.isEmpty()) m_gamePathLabel->setText(path);
@@ -37,42 +35,34 @@ AccountDialog::AccountDialog(QWidget *parent)
     pathBox->addWidget(browseBtn);
     root->addLayout(pathBox);
 
-    // ── 角色名图片 ──
-    auto *charGroup = new QGroupBox(QString::fromUtf8("角色名截图"));
-    auto *charGrid = new QGridLayout(charGroup);
-    charGrid->setHorizontalSpacing(8);
-
-    for (int i = 0; i < 3; i++) {
-        charGrid->addWidget(new QLabel(QString("窗口%1").arg(i + 1)), i, 0);
-        m_charPreviews[i] = new QLabel();
-        m_charPreviews[i]->setFixedSize(48, 48);
-        m_charPreviews[i]->setStyleSheet("border:1px solid #555; background:#222;");
-        m_charPreviews[i]->setAlignment(Qt::AlignCenter);
-        m_charPreviews[i]->setText("?");
-        charGrid->addWidget(m_charPreviews[i], i, 1);
-
-        auto *pickBtn = new QPushButton(QString::fromUtf8("选择图片..."));
-        connect(pickBtn, &QPushButton::clicked, this, [this, i]() { pickCharImage(i); });
-        charGrid->addWidget(pickBtn, i, 2);
-    }
-    root->addWidget(charGroup);
-
-    // ── 账号密码 ──
+    // ── 账号密码 / 角色名 / 门派 ──
     auto *acctGroup = new QGroupBox(QString::fromUtf8("账号信息"));
     auto *acctGrid = new QGridLayout(acctGroup);
     acctGrid->setHorizontalSpacing(8);
     acctGrid->addWidget(new QLabel(QString::fromUtf8("账号")), 0, 1);
     acctGrid->addWidget(new QLabel(QString::fromUtf8("密码")), 0, 2);
+    acctGrid->addWidget(new QLabel(QString::fromUtf8("角色名")), 0, 3);
+    acctGrid->addWidget(new QLabel(QString::fromUtf8("门派")), 0, 4);
+
+    QStringList factions = {"", QString::fromUtf8("少林"), QString::fromUtf8("天煞"),
+        QString::fromUtf8("蜀山"), QString::fromUtf8("寒冰"), QString::fromUtf8("无名"),
+        QString::fromUtf8("侠隐"), QString::fromUtf8("百花医"), QString::fromUtf8("百花蛊")};
 
     for (int i = 0; i < 3; i++) {
         acctGrid->addWidget(new QLabel(QString("窗口%1").arg(i + 1)), i + 1, 0);
         m_accEdits[i] = new QLineEdit();
         m_pwdEdits[i] = new QLineEdit();
         m_pwdEdits[i]->setEchoMode(QLineEdit::Password);
-        m_accEdits[i]->setMaximumWidth(120);
-        m_pwdEdits[i]->setMaximumWidth(120);
+        m_accEdits[i]->setMaximumWidth(140);
+        m_pwdEdits[i]->setMaximumWidth(100);
+        m_nameEdits[i] = new QLineEdit();
+        m_nameEdits[i]->setMaximumWidth(80);
+        m_factionCombos[i] = new QComboBox();
+        m_factionCombos[i]->addItems(factions);
         acctGrid->addWidget(m_accEdits[i], i + 1, 1);
         acctGrid->addWidget(m_pwdEdits[i], i + 1, 2);
+        acctGrid->addWidget(m_nameEdits[i], i + 1, 3);
+        acctGrid->addWidget(m_factionCombos[i], i + 1, 4);
     }
     root->addWidget(acctGroup);
 
@@ -98,31 +88,15 @@ void AccountDialog::load()
     QString gamePath = settings.value("Accounts/GamePath").toString();
     if (gamePath.isEmpty()) gamePath = findGamePath();
     m_gamePathLabel->setText(gamePath.isEmpty() ? QString::fromUtf8("(未找到)") : gamePath);
-    QDir().mkpath("images/roles");
 
-    // 账号 （config.ini 用 Slot0/Account 扁平 key，非嵌套 section）
+    // 账号
     for (int i = 0; i < 3; i++) {
         QString slotKey = QString("Slot%1").arg(i);
-        m_charPaths[i] = settings.value("Accounts/" + slotKey + "/CharImage").toString();
-        if (m_charPaths[i].isEmpty()) {
-            QString defaultPath = QDir("images/roles").absoluteFilePath(
-                settings.value("Accounts/" + slotKey + "/CharName").toString() + ".png");
-            if (QFileInfo::exists(defaultPath)) m_charPaths[i] = defaultPath;
-        }
         m_accEdits[i]->setText(settings.value("Accounts/" + slotKey + "/Account").toString());
         m_pwdEdits[i]->setText(settings.value("Accounts/" + slotKey + "/Password").toString());
-
-        // 预览
-        QString defRole = QDir("images/roles").absoluteFilePath(m_accEdits[i]->text() + ".png");
-    if (!QFileInfo::exists(m_charPaths[i]) && QFileInfo::exists(defRole))
-        m_charPaths[i] = defRole;
-    if (!m_charPaths[i].isEmpty() && QFileInfo::exists(m_charPaths[i])) {
-            QPixmap pix(m_charPaths[i]);
-            if (!pix.isNull())
-                m_charPreviews[i]->setPixmap(pix.scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-            else
-                m_charPreviews[i]->setText("?");
-        }
+        m_nameEdits[i]->setText(settings.value("Accounts/" + slotKey + "/CharName").toString());
+        int fi = m_factionCombos[i]->findText(settings.value("Accounts/" + slotKey + "/CharFaction").toString());
+        if (fi >= 0) m_factionCombos[i]->setCurrentIndex(fi);
     }
 }
 
@@ -136,9 +110,10 @@ void AccountDialog::save()
 
     for (int i = 0; i < 3; i++) {
         QString slotKey = QString("Slot%1").arg(i);
-        settings.setValue("Accounts/" + slotKey + "/CharImage", m_charPaths[i]);
         settings.setValue("Accounts/" + slotKey + "/Account", m_accEdits[i]->text());
         settings.setValue("Accounts/" + slotKey + "/Password", m_pwdEdits[i]->text());
+        settings.setValue("Accounts/" + slotKey + "/CharName", m_nameEdits[i]->text());
+        settings.setValue("Accounts/" + slotKey + "/CharFaction", m_factionCombos[i]->currentText());
     }
     emit accountsChanged();
     accept();
@@ -181,17 +156,3 @@ QString AccountDialog::findGamePath()
     return "";
 }
 
-void AccountDialog::pickCharImage(int slotIdx)
-{
-    QDir().mkpath("images/roles");
-    QString path = QFileDialog::getOpenFileName(this,
-        QString::fromUtf8("选择角色名截图"),
-        m_charPaths[slotIdx],
-        QString::fromUtf8("图片 (*.png *.jpg *.bmp);;所有文件 (*)"));
-    if (path.isEmpty()) return;
-
-    m_charPaths[slotIdx] = path;
-    QPixmap pix(path);
-    if (!pix.isNull())
-        m_charPreviews[slotIdx]->setPixmap(pix.scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-}

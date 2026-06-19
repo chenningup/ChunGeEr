@@ -35,6 +35,10 @@ public:
     void setCharName(const QString &name) { m_charName = name; }
     QString charName() const { return m_charName; }
 
+    // 角色门派
+    void setCharFaction(const QString &faction) { m_charFaction = faction; }
+    QString charFaction() const { return m_charFaction; }
+
     // ── 窗口 ──
     HWND findMatchingWindow(const cv::Mat &charNameROI); // 在所有游戏窗口中匹配这个角色的截图
     HWND hwnd() const { return m_hwnd; }
@@ -85,6 +89,7 @@ private:
     QString m_account;
     QString m_password;
     QString m_charName;    // 角色名，存为文件名如"张三.png"
+    QString m_charFaction; // 角色门派
     HWND m_hwnd = nullptr;
     bool m_loggedIn = false;
 

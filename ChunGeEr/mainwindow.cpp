@@ -941,7 +941,8 @@ void MainWindow::loadAccountCombo()
         QString display = name.isEmpty() ? account : name;
 
         auto *slot = mScheduler->slot(i);
-        slot->setCharName(display);
+        slot->setCharName(name);
+        slot->setCharFaction(settings.value("Accounts/" + sk + "/CharFaction").toString());
         slot->setAccount(
             account,
             settings.value("Accounts/" + sk + "/Password").toString());
@@ -989,7 +990,8 @@ void MainWindow::on_accountComboChanged(int idx)
             slot->setAccount(
                 settings.value("Accounts/" + sk + "/Account").toString(),
                 settings.value("Accounts/" + sk + "/Password").toString());
-            slot->setCharName(selected);
+            slot->setCharName(settings.value("Accounts/" + sk + "/CharName").toString());
+            slot->setCharFaction(settings.value("Accounts/" + sk + "/CharFaction").toString());
             break;
         }
     }

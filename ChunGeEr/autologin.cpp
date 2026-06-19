@@ -28,7 +28,7 @@ QString AutoLogin::phaseText() const
         "Idle","LaunchGame","WaitLauncher","ClickStartGame","WaitGameWindow",
         "WaitLoading",
         "DetectLogin","TypeAccount","TypePassword","ClickLoginBtn",
-        "WaitServerSelect","ConfirmServer","WaitCharSelect","EnterGame",
+        "WaitServerSelect","ConfirmServer","WaitCharSelect","CharSelect","CharCreate","EnterGame",
         "VerifyInGame","Done","Failed"
     };
     int idx = (int)m_phase;
@@ -256,9 +256,8 @@ void AutoLogin::processState()
         if (hasLoginScreen) {
             loginLog("✅ 加载完成，检测到登录界面");
 
-            // 同BaseService::setDatangWindowPos
+            // 窗口句柄可能已过期，重新确认
             if (m_gameHwnd && !::IsWindow(m_gameHwnd)) {
-                // 窗口句柄失效，重新找
                 HWND top = GetTopWindow(nullptr);
                 while (top) {
                     if (IsWindowVisible(top)) {
@@ -272,25 +271,6 @@ void AutoLogin::processState()
                     }
                     top = GetNextWindow(top, GW_HWNDNEXT);
                 }
-            }
-            if (m_gameHwnd) {
-                // 从配置读目标窗口位置和大小
-                QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
-                int targetX = settings.value("GameWindow/PosX", 0).toInt();
-                int targetY = settings.value("GameWindow/PosY", 0).toInt();
-                int targetW = settings.value("GameWindow/Width", 1024).toInt();
-                int targetH = settings.value("GameWindow/Height", 768).toInt();
-                loginLog(QString("窗口目标: (%1,%2) %3x%4")
-                    .arg(targetX).arg(targetY).arg(targetW).arg(targetH));
-                ::SetWindowPos(m_gameHwnd, HWND_TOP, targetX, targetY,
-                               targetW, targetH,
-                               SWP_SHOWWINDOW);
-                QThread::msleep(300);
-                RECT wr;
-                ::GetWindowRect(m_gameHwnd, &wr);
-                loginLog(QString("定位后: (%1,%2) %3x%4")
-                    .arg(wr.left).arg(wr.top)
-                    .arg(wr.right-wr.left).arg(wr.bottom-wr.top));
             }
 
             QThread::msleep(1000);
@@ -322,6 +302,28 @@ void AutoLogin::processState()
         // 用整张登录界面模板确认
         if (matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.18)) {
             loginLog("✅ 登录界面确认");
+
+            // 登录界面出来后设窗口位置和大小（游戏已完全加载，SetWindowPos生效）
+            if (m_gameHwnd) {
+                QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+                int targetX = settings.value("GameWindow/PosX", 0).toInt();
+                int targetY = settings.value("GameWindow/PosY", 0).toInt();
+                int targetW = settings.value("GameWindow/Width", 1024).toInt();
+                int targetH = settings.value("GameWindow/Height", 768).toInt();
+                loginLog(QString("窗口目标: (%1,%2) %3x%4")
+                    .arg(targetX).arg(targetY).arg(targetW).arg(targetH));
+
+                ::SetWindowPos(m_gameHwnd, HWND_TOP, targetX, targetY,
+                               targetW, targetH,
+                               SWP_SHOWWINDOW);
+                QThread::msleep(300);
+                RECT wr;
+                ::GetWindowRect(m_gameHwnd, &wr);
+                loginLog(QString("定位后: (%1,%2) %3x%4")
+                    .arg(wr.left).arg(wr.top)
+                    .arg(wr.right-wr.left).arg(wr.bottom-wr.top));
+            }
+
             transitionTo(LoginPhase::TypeAccount);
             m_retryCount = 0;
             return;
@@ -469,20 +471,123 @@ void AutoLogin::processState()
     // ── 11. 等待角色选择 ──
     case LoginPhase::WaitCharSelect:
     {
-        if (m_phaseTicks > 12) {
+        if (m_phaseTicks > 20) {
+            loginLog("⚠️ 角色选择界面超时，尝试直接进入");
             transitionTo(LoginPhase::EnterGame);
             return;
         }
         cv::Mat frame = screenToMat();
         if (frame.empty()) return;
 
-        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", nullptr, 0.30)) {
-            transitionTo(LoginPhase::EnterGame);
+        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", nullptr, 0.30) ||
+            matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", nullptr, 0.30)) {
+            // 到了角色选择界面，分叉
+            if (m_slot->charName().isEmpty())
+                transitionTo(LoginPhase::CharCreate);
+            else
+                transitionTo(LoginPhase::CharSelect);
         }
         break;
     }
 
-    // ── 12. 进入游戏 ──
+    // ── 12. 选择已有角色 → 进入游戏 ──
+    case LoginPhase::CharSelect:
+    {
+        loginLog(QString("选择角色: %1").arg(m_slot->charName()));
+        cv::Mat frame = screenToMat();
+        QPoint center;
+        if (!frame.empty() && matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.30)) {
+            // TODO: 如果多个角色槽，先点角色再点进入游戏
+            // 目前假定角色已选中，直接点进入游戏
+            humanClick(center.x(), center.y());
+            QThread::msleep(3000);
+            transitionTo(LoginPhase::VerifyInGame);
+            emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
+        }
+        break;
+    }
+
+    // ── 13. 创建新角色 ──
+    case LoginPhase::CharCreate:
+    {
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) return;
+
+        // 阶段0: 在角色列表页，点"创建角色"
+        if (m_charCreateStep == 0) {
+            QPoint center;
+            if (matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", &center, 0.40)) {
+                loginLog("点击创建角色");
+                humanClick(center.x(), center.y());
+                m_charCreateStep = 1;
+                m_phaseTicks = 0;
+            }
+            return;
+        }
+
+        // 阶段1: 在创建界面，选门派
+        if (m_charCreateStep == 1) {
+            if (m_phaseTicks > 10) {
+                loginLog("⚠️ 创建角色界面超时");
+                transitionTo(LoginPhase::Failed);
+                return;
+            }
+            QString faction = m_slot->charFaction();
+            if (faction.isEmpty()) {
+                loginLog("❌ 未配置门派，跳过创建");
+                transitionTo(LoginPhase::Failed);
+                return;
+            }
+            // 模板匹配门派图标（需 images/roles/门派名.png）
+            QPoint fc;
+            if (matchTemplate(frame, faction, &fc, 0.50)) {
+                loginLog(QString("选择门派: %1").arg(faction));
+                humanClick(fc.x(), fc.y());
+                m_charCreateStep = 2;
+                m_phaseTicks = 0;
+            } else {
+                loginLog(QString("未找到门派模板: %1").arg(faction));
+            }
+            return;
+        }
+
+        // 阶段2: 输入角色名
+        if (m_charCreateStep == 2) {
+            if (m_phaseTicks == 0) {
+                QThread::msleep(500);
+                QString name = m_slot->charName();
+                loginLog(QString("输入角色名: %1").arg(name));
+                typeText(name);
+                m_charCreateStep = 3;
+                m_phaseTicks = 0;
+            }
+            return;
+        }
+
+        // 阶段3: 确认创建
+        if (m_charCreateStep == 3) {
+            if (m_phaseTicks > 8) {
+                loginLog("⚠️ 确认创建超时");
+                transitionTo(LoginPhase::Failed);
+                return;
+            }
+            QPoint ok;
+            if (matchTemplate(frame, "\u786e\u5b9a", &ok, 0.40) ||
+                matchTemplate(frame, "\u521b\u5efa", &ok, 0.40)) {
+                loginLog("点击确认创建");
+                humanClick(ok.x(), ok.y());
+                QThread::msleep(2000);
+                // 创建完成，回到角色选择
+                m_charCreateStep = 0;
+                m_phaseTicks = 0;
+                m_retryCount = 0;
+                transitionTo(LoginPhase::WaitCharSelect);
+            }
+        }
+        break;
+    }
+
+    // ── 14. 进入游戏（兜底，直接按回车）──
     case LoginPhase::EnterGame:
     {
         cv::Mat frame = screenToMat();
@@ -614,7 +719,7 @@ QString AutoLogin::phaseName(LoginPhase p) const
         "Idle","LaunchGame","WaitLauncher","ClickStartGame","WaitGameWindow",
         "WaitLoading",
         "DetectLogin","TypeAccount","TypePassword","ClickLoginBtn",
-        "WaitServerSelect","ConfirmServer","WaitCharSelect","EnterGame",
+        "WaitServerSelect","ConfirmServer","WaitCharSelect","CharSelect","CharCreate","EnterGame",
         "VerifyInGame","Done","Failed"
     };
     int idx = (int)p;

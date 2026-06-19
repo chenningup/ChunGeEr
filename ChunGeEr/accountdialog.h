@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QLineEdit>
+#include <QComboBox>
 #include <QLabel>
 #include <QSettings>
 
@@ -19,12 +20,11 @@ private:
     void save();
     void load();
     QString findGamePath();
-    void pickCharImage(int slotIdx);
 
-    QLabel *m_charPreviews[3];
-    QString m_charPaths[3];
     QLineEdit *m_accEdits[3];
     QLineEdit *m_pwdEdits[3];
+    QLineEdit *m_nameEdits[3];
+    QComboBox *m_factionCombos[3];
     QLabel *m_gamePathLabel;
 };
 

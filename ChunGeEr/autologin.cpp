@@ -1,26 +1,15 @@
-﻿#include "autologin.h"
-#include <QCoreApplication>
+#include "autologin.h"
 #include "gameutils.h"
 #include "gameslot.h"
 #include "LeoControl/mousekeyboardmanager.h"
 #include "XuLog.h"
 #include <QThread>
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QSettings>
-#include <QProcess>
-#include <QRandomGenerator>
 #include <windows.h>
-#include <shlobj.h>
-#include <shobjidl.h>
 #include <opencv2/imgproc.hpp>
 
-// ── 超时常量 ──
-static const int MAX_RETRIES = 8;
-static const int LAUNCHER_TIMEOUT = 30;
-
-// ════════════════════════════════════════════════
-// 构造
-// ════════════════════════════════════════════════
 AutoLogin::AutoLogin(GameSlot *slot, QObject *parent)
     : QObject(parent), m_slot(slot)
 {
@@ -28,6 +17,7 @@ AutoLogin::AutoLogin(GameSlot *slot, QObject *parent)
     m_timer->setInterval(m_loopIntervalMs);
     connect(m_timer, &QTimer::timeout, this, &AutoLogin::processState);
 
+    // 订阅 D3D11 桌面截图
     connect(&ScreenCaptureManager::Instance(), &ScreenCaptureManager::capturedScreen,
             this, &AutoLogin::onCaptureScreen);
 }
@@ -55,6 +45,7 @@ void AutoLogin::start(const QString &gamePath)
     m_launcherHwnd = nullptr;
     m_gameHwnd = nullptr;
 
+    // 确保截图管理器在跑
     ScreenCaptureManager::Instance().startCapture();
 
     transitionTo(LoginPhase::LaunchGame);
@@ -82,27 +73,26 @@ void AutoLogin::onCaptureScreen(ScreenCaptureManager::ScreenData data)
     m_picMutex.unlock();
 }
 
+// ════════════════════════════════════════════════
+// 截图 → cv::Mat
+// ════════════════════════════════════════════════
 cv::Mat AutoLogin::screenToMat()
 {
     m_picMutex.lock();
-    auto pic = m_curPic;
-    m_picMutex.unlock();
-
-    if (pic.des.Width <= 0 || pic.des.Height <= 0 || !pic.data || pic.data->empty())
-        return cv::Mat();
-
-    int w = (int)pic.des.Width, h = (int)pic.des.Height;
-    int step = (pic.RowPitch > 0) ? pic.RowPitch : (int)(pic.des.Width * 4);
-    cv::Mat bgra = cv::Mat(h, w, CV_8UC4, (void*)pic.data->data(), (size_t)step).clone();
-    if (bgra.empty()) return cv::Mat();
-
+    if (!m_curPic.data || m_curPic.data->empty()) {
+        m_picMutex.unlock();
+        return {};
+    }
+    cv::Mat img(m_curPic.des.Height, m_curPic.des.Width, CV_8UC4,
+                m_curPic.data->data(), m_curPic.RowPitch);
     cv::Mat bgr;
-    cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+    cv::cvtColor(img, bgr, cv::COLOR_BGRA2BGR);
+    m_picMutex.unlock();
     return bgr;
 }
 
 // ════════════════════════════════════════════════
-// 状态机主循环
+// 主状态机
 // ════════════════════════════════════════════════
 void AutoLogin::processState()
 {
@@ -110,6 +100,7 @@ void AutoLogin::processState()
 
     switch (m_phase) {
 
+    // ── 0. 启动游戏进程 ──
     case LoginPhase::LaunchGame:
     {
         loginLog("启动游戏进程...");
@@ -117,36 +108,24 @@ void AutoLogin::processState()
             m_process->deleteLater();
             m_process = nullptr;
         }
+        m_process = new QProcess;
 
-        QString exePath = m_gamePath;
         if (m_gamePath.endsWith(".lnk", Qt::CaseInsensitive)) {
-            wchar_t target[MAX_PATH] = {0};
-            IShellLinkW *psl;
-            IPersistFile *ppf;
-            HRESULT hr = CoInitialize(nullptr);
-            if (SUCCEEDED(hr) &&
-                SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                    IID_IShellLinkW, (void**)&psl))) {
-                if (SUCCEEDED(psl->QueryInterface(IID_IPersistFile, (void**)&ppf))) {
-                    if (SUCCEEDED(ppf->Load(reinterpret_cast<LPCWSTR>(m_gamePath.utf16()), 0)) &&
-                        SUCCEEDED(psl->GetPath(target, MAX_PATH, nullptr, 0))) {
-                        exePath = QString::fromWCharArray(target);
-                    }
-                    ppf->Release();
-                }
-                psl->Release();
+            m_process->start("cmd", {"/c", "start", "", m_gamePath});
+        } else {
+            SHELLEXECUTEINFOW sei = {sizeof(sei)};
+            sei.lpVerb = L"runas";
+            sei.lpFile = reinterpret_cast<LPCWSTR>(m_gamePath.utf16());
+            sei.lpDirectory = reinterpret_cast<LPCWSTR>(
+                QFileInfo(m_gamePath).absolutePath().utf16());
+            sei.nShow = SW_SHOWNORMAL;
+            if (!::ShellExecuteExW(&sei)) {
+                loginLog("❌ ShellExecuteEx 启动失败");
+                emit statusMessage(QString("[窗口%1] 启动失败，请检查路径")
+                    .arg(m_slot->index() + 1));
+                cancel();
+                return;
             }
-            CoUninitialize();
-        }
-
-        loginLog(QString("启动: %1").arg(exePath));
-        bool ok = QProcess::startDetached(exePath, {}, QFileInfo(exePath).absolutePath());
-        if (!ok) {
-            loginLog("❌ QProcess::startDetached 启动失败");
-            emit statusMessage(QString("[窗口%1] 启动失败，请检查路径")
-                .arg(m_slot->index() + 1));
-            cancel();
-            return;
         }
         transitionTo(LoginPhase::WaitLauncher);
         emit statusMessage(QString("[窗口%1] 进程已启动，等待启动器...")
@@ -157,8 +136,7 @@ void AutoLogin::processState()
     // ── 1. 等待启动器窗口 ──
     case LoginPhase::WaitLauncher:
     {
-        HWND hwnd = FindWindowW(nullptr, L"无双启动器");
-        if (!hwnd) hwnd = FindWindowW(L"Qt5152QWindowIcon", nullptr);
+        HWND hwnd = FindWindowW(L"Qt5152QWindowIcon", nullptr);
         if (!hwnd) hwnd = FindWindowW(nullptr, L"大唐无双");
 
         if (hwnd) {
@@ -192,22 +170,21 @@ void AutoLogin::processState()
             QThread::msleep(200);
         }
 
-        auto result = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "开始游戏");
-        if (result.confidence >= 0.6) {
-            loginLog(QString("✅ 检测到开始游戏按钮 (%1,%2) conf=%3")
-                .arg(result.centerX).arg(result.centerY).arg(result.confidence));
-            QPoint screenPos = frameToScreen(
-                QPoint(result.centerX, result.centerY), m_launcherHwnd);
-            humanClick(screenPos.x(), screenPos.y());
-            QThread::msleep(1000);
+        QPoint center;
+        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.6)) {
+            loginLog(QString("✅ 检测到开始游戏按钮 (%1,%2)")
+                .arg(center.x()).arg(center.y()));
+            humanClick(center.x(), center.y());
+            QThread::msleep(1500);
             transitionTo(LoginPhase::WaitGameWindow);
-            emit statusMessage(QString("[窗口%1] 已点击开始游戏")
+            emit statusMessage(QString("[窗口%1] 点击开始游戏，等待游戏窗口...")
                 .arg(m_slot->index() + 1));
+            m_retryCount = 0;
             return;
         }
 
-        if (m_phaseTicks > 40) {
-            loginLog("❌ 找不到开始游戏按钮");
+        if (++m_retryCount > MAX_RETRIES) {
+            loginLog("❌ 开始游戏按钮检测失败");
             cancel();
         }
         break;
@@ -216,254 +193,396 @@ void AutoLogin::processState()
     // ── 3. 等待游戏客户端窗口 ──
     case LoginPhase::WaitGameWindow:
     {
-        HWND hwnd = FindWindowW(nullptr, L"大唐无双");
+        // 模糊匹配标题含"大唐"的窗口
+        HWND hwnd = nullptr;
+        HWND top = GetTopWindow(nullptr);
+        while (top) {
+            if (IsWindowVisible(top)) {
+                WCHAR buf[256] = {0};
+                GetWindowTextW(top, buf, 255);
+                if (wcsstr(buf, L"\u5927\u5510")) {
+                    hwnd = top;
+                    break;
+                }
+            }
+            top = GetNextWindow(top, GW_HWNDNEXT);
+        }
+
         if (hwnd && hwnd != m_launcherHwnd) {
             m_gameHwnd = hwnd;
             m_slot->setHwnd(hwnd);
             QThread::msleep(500);
-            loginLog(QString("✅ 检测到游戏窗口 hwnd=%1").arg((uintptr_t)hwnd, 0, 16));
+            QThread::msleep(500);
+
+            loginLog(QString("✅ 游戏窗口已找到 hwnd=%1 pos=(-4,3) size=1048x837")
+                .arg((uintptr_t)hwnd, 0, 16));
             transitionTo(LoginPhase::WaitLoading);
-            emit statusMessage(QString("[窗口%1] 检测到游戏窗口")
+            emit statusMessage(QString("[窗口%1] 游戏窗口已找到，等待加载...")
                 .arg(m_slot->index() + 1));
+            m_retryCount = 0;
             return;
         }
 
-        if (m_phaseTicks > 60) {
+        if (m_phaseTicks > LAUNCHER_TIMEOUT) {
             loginLog("❌ 等待游戏窗口超时");
             cancel();
         }
         break;
     }
 
-    // ── 4. 等待游戏加载完成 ──
+    // ── 4. 等游戏加载，直到出现登录界面 ──
     case LoginPhase::WaitLoading:
     {
         cv::Mat frame = screenToMat();
-        if (frame.empty()) {
-            if (++m_retryCount > MAX_RETRIES + 5) { cancel(); }
-            return;
-        }
+        if (frame.empty()) return;
 
-        auto result = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "登录界面");
-        if (result.confidence >= 0.5) {
-            loginLog(QString("✅ 检测到登录界面 (%1,%2) conf=%3")
-                .arg(result.centerX).arg(result.centerY).arg(result.confidence));
-            transitionTo(LoginPhase::DetectLogin);
-            emit statusMessage(QString("[窗口%1] 进入登录界面")
+        auto &gu = GameUtils::Instance();
+        auto locMatch = gu.detectLocation(frame);
+
+        // 如果已在游戏中（可能是上次没退），跳过登录
+        if (!locMatch.name.isEmpty() && locMatch.confidence > 0.6) {
+            m_slot->setLoggedIn(true);
+            loginLog(QString("✅ 已在游戏中 (地点=%1)")
+                .arg(locMatch.name.toStdString()));
+            transitionTo(LoginPhase::Done);
+            emit statusMessage(QString("[窗口%1] 已在游戏中！")
                 .arg(m_slot->index() + 1));
+            emit finished(true);
             return;
         }
 
-        if (m_phaseTicks > 60) {
-            loginLog("❌ 等待登录界面超时");
-            cancel();
+        // 等登录界面出现（用整张登录界面模板匹配）
+        bool hasLoginScreen = matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.18);
+        if (hasLoginScreen) {
+            loginLog("✅ 加载完成，检测到登录界面");
+
+            // 同BaseService::setDatangWindowPos
+            if (m_gameHwnd && !::IsWindow(m_gameHwnd)) {
+                // 窗口句柄失效，重新找
+                HWND top = GetTopWindow(nullptr);
+                while (top) {
+                    if (IsWindowVisible(top)) {
+                        WCHAR buf[256] = {0};
+                        GetWindowTextW(top, buf, 255);
+                        if (wcsstr(buf, L"\u5927\u5510")) {
+                            m_gameHwnd = top;
+                            m_slot->setHwnd(top);
+                            break;
+                        }
+                    }
+                    top = GetNextWindow(top, GW_HWNDNEXT);
+                }
+            }
+            if (m_gameHwnd) {
+                // 从配置读目标窗口位置和大小
+                QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+                int targetX = settings.value("GameWindow/PosX", 0).toInt();
+                int targetY = settings.value("GameWindow/PosY", 0).toInt();
+                int targetW = settings.value("GameWindow/Width", 1024).toInt();
+                int targetH = settings.value("GameWindow/Height", 768).toInt();
+                loginLog(QString("窗口目标: (%1,%2) %3x%4")
+                    .arg(targetX).arg(targetY).arg(targetW).arg(targetH));
+                ::SetWindowPos(m_gameHwnd, HWND_TOP, targetX, targetY,
+                               targetW, targetH,
+                               SWP_SHOWWINDOW);
+                QThread::msleep(300);
+                RECT wr;
+                ::GetWindowRect(m_gameHwnd, &wr);
+                loginLog(QString("定位后: (%1,%2) %3x%4")
+                    .arg(wr.left).arg(wr.top)
+                    .arg(wr.right-wr.left).arg(wr.bottom-wr.top));
+            }
+
+            QThread::msleep(1000);
+            transitionTo(LoginPhase::DetectLogin);
+            m_retryCount = 0;
+            return;
+        }
+
+        if (m_phaseTicks % 8 == 1) {
+            loginLog(QString("等待加载... (%1s)").arg(m_phaseTicks * m_loopIntervalMs / 1000));
+        }
+
+        if (m_phaseTicks > 60) { // 48秒超时
+            loginLog("加载超时，尝试直接输入");
+            transitionTo(LoginPhase::DetectLogin);
         }
         break;
     }
 
-    // ── 5. 检测登录界面 → 账号/密码框 ──
+    // ── 5. 检测登录界面 ──
     case LoginPhase::DetectLogin:
     {
         cv::Mat frame = screenToMat();
         if (frame.empty()) {
-            if (++m_retryCount > MAX_RETRIES + 5) { cancel(); }
+            if (++m_retryCount > MAX_RETRIES) { cancel(); }
             return;
         }
 
-        auto accResult = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "账号");
-        auto pwdResult = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "密码");
-
-        if (accResult.confidence >= 0.5 && pwdResult.confidence >= 0.5) {
-            loginLog(QString("✅ 检测到账号框(%1,%2) 密码框(%3,%4)")
-                .arg(accResult.centerX).arg(accResult.centerY)
-                .arg(pwdResult.centerX).arg(pwdResult.centerY));
-
-            // 点账号框右侧区域聚焦
-            QPoint screenPos = frameToScreen(
-                QPoint(accResult.centerX + 120, accResult.centerY), m_gameHwnd);
-            humanClick(screenPos.x(), screenPos.y());
-            QThread::msleep(300);
+        // 用整张登录界面模板确认
+        if (matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.18)) {
+            loginLog("✅ 登录界面确认");
             transitionTo(LoginPhase::TypeAccount);
-            emit statusMessage(QString("[窗口%1] 输入账号...")
-                .arg(m_slot->index() + 1));
+            m_retryCount = 0;
             return;
         }
 
-        if (m_phaseTicks > 10) {
-            loginLog("账号/密码框未检测到，尝试盲输");
+        if (++m_retryCount > MAX_RETRIES) {
+            loginLog("未检测到登录界面，尝试输入");
             transitionTo(LoginPhase::TypeAccount);
+            m_retryCount = 0;
         }
         break;
     }
 
-    // ── 6. 输入账号 ──
+    // ── 6. 点击账号输入框 → 输入账号 ──
     case LoginPhase::TypeAccount:
     {
-        QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
-        QString sk = QString("Slot%1").arg(m_slot->index());
-        QString account = settings.value("Accounts/" + sk + "/Account").toString();
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) {
+            if (++m_retryCount > MAX_RETRIES) { cancel(); }
+            return;
+        }
 
-        loginLog(QString("输入账号: %1").arg(account));
-        typeText(account);
+        QString acc = m_slot->account();
+        if (acc.isEmpty()) { cancel(); return; }
 
-        QThread::msleep(300);
-        pressKey(VK_RETURN);
+        // 找到账号标签，往右点（输入框在标签右边）
+        QPoint accPt;
+        if (matchTemplate(frame, "\u8d26\u53f7", &accPt, 0.6)) {
+            int clickX = accPt.x() + 80;  // 往右偏移到输入框
+            int clickY = accPt.y();
+            loginLog(QString("✅ 检测到账号标签 (%1,%2) → 点击输入框 (%3,%4)")
+                .arg(accPt.x()).arg(accPt.y()).arg(clickX).arg(clickY));
+            humanClick(clickX, clickY);
+            QThread::msleep(500);
+        } else {
+            loginLog("未检测到账号标签，Tab切换");
+            pressKey(KEY_TAB); QThread::msleep(100);
+            pressKey(KEY_TAB); QThread::msleep(500);
+        }
+
+        // 点击输入框后直接输入
+        loginLog(QString("输入账号 %1").arg(acc));
+        typeText(acc);
         QThread::msleep(200);
-        pressKey(VK_RETURN);
-        QThread::msleep(500);
+        pressKey(KEY_RETURN); QThread::msleep(150);
+        pressKey(KEY_RETURN);  // 两次回车
+        QThread::msleep(300);
 
         transitionTo(LoginPhase::TypePassword);
-        emit statusMessage(QString("[窗口%1] 输入密码...")
+        break;
+    }
+
+    // ── 7. 点击密码输入框 → 输入密码 ──
+    case LoginPhase::TypePassword:
+    {
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) { return; }
+
+        QString pwd = m_slot->password();
+
+        // 找到密码标签，往右点（输入框在标签右边）
+        QPoint pwdPt;
+        if (matchTemplate(frame, "\u5bc6\u7801", &pwdPt, 0.6)) {
+            int clickX = pwdPt.x() + 80;  // 往右偏移到输入框
+            int clickY = pwdPt.y();
+            loginLog(QString("✅ 检测到密码标签 (%1,%2) → 点击输入框 (%3,%4)")
+                .arg(pwdPt.x()).arg(pwdPt.y()).arg(clickX).arg(clickY));
+            humanClick(clickX, clickY);
+            QThread::msleep(500);
+        } else {
+            loginLog("未检测到密码标签，Tab切换");
+            pressKey(KEY_TAB); QThread::msleep(500);
+        }
+
+        // 点击输入框后直接输入
+        // 点击密码输入框后直接输入
+        loginLog("输入密码 ***");
+        typeText(pwd);
+        QThread::msleep(200);
+
+        transitionTo(LoginPhase::ClickLoginBtn);
+        emit statusMessage(QString("[窗口%1] 账号密码已输入")
             .arg(m_slot->index() + 1));
         break;
     }
 
-    // ── 7. 输入密码 ──
-    case LoginPhase::TypePassword:
-    {
-        QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
-        QString sk = QString("Slot%1").arg(m_slot->index());
-        QString password = settings.value("Accounts/" + sk + "/Password").toString();
-
-        loginLog("输入密码");
-        typeText(password);
-        QThread::msleep(300);
-
-        transitionTo(LoginPhase::ClickLoginBtn);
-        break;
-    }
-
-    // ── 8. 点击登录按钮 ──
+    // ── 8. 检测登录按钮 → 点击 ──
     case LoginPhase::ClickLoginBtn:
     {
         cv::Mat frame = screenToMat();
-        if (frame.empty()) {
-            if (++m_retryCount > MAX_RETRIES + 5) { cancel(); }
-            return;
-        }
+        QPoint center;
+        bool found = !frame.empty() && matchTemplate(frame, "\u767b\u5f55", &center, 0.6);
 
-        auto result = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "登录");
-        if (result.confidence >= 0.5) {
-            loginLog(QString("✅ 点击登录按钮 (%1,%2) conf=%3")
-                .arg(result.centerX).arg(result.centerY).arg(result.confidence));
-            QPoint screenPos = frameToScreen(
-                QPoint(result.centerX, result.centerY), m_gameHwnd);
-            humanClick(screenPos.x(), screenPos.y());
-            QThread::msleep(2000);
-            transitionTo(LoginPhase::WaitServerSelect);
-            return;
+        if (found) {
+            loginLog(QString("✅ 点击登录按钮 (%1,%2)").arg(center.x()).arg(center.y()));
+            humanClick(center.x(), center.y());
+        } else {
+            loginLog("未检测到登录按钮，按回车");
+            pressKey(KEY_RETURN);
         }
+        QThread::msleep(1500);
 
-        if (m_phaseTicks > 20) {
-            loginLog("❌ 找不到登录按钮");
-            cancel();
-        }
+        transitionTo(LoginPhase::WaitServerSelect);
+        emit statusMessage(QString("[窗口%1] 已点击登录，等待服务器...")
+            .arg(m_slot->index() + 1));
         break;
     }
 
     // ── 9. 等待服务器选择 ──
     case LoginPhase::WaitServerSelect:
     {
+        if (m_phaseTicks > 12) {
+            transitionTo(LoginPhase::ConfirmServer);
+            return;
+        }
         cv::Mat frame = screenToMat();
-        if (frame.empty()) {
-            if (++m_retryCount > MAX_RETRIES + 10) { cancel(); }
-            return;
-        }
+        if (frame.empty()) return;
 
-        auto result = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "服务器确定");
-        if (result.confidence >= 0.5) {
-            QPoint screenPos = frameToScreen(
-                QPoint(result.centerX, result.centerY), m_gameHwnd);
-            humanClick(screenPos.x(), screenPos.y());
-            QThread::msleep(1500);
-            transitionTo(LoginPhase::WaitCharSelect);
-            emit statusMessage(QString("[窗口%1] 确认服务器")
-                .arg(m_slot->index() + 1));
-            return;
-        }
-
-        if (m_phaseTicks > 20) {
-            loginLog("服务器选择超时，跳过");
-            transitionTo(LoginPhase::WaitCharSelect);
+        if (matchTemplate(frame, "服务器确定", nullptr, 0.55)) {
+            transitionTo(LoginPhase::ConfirmServer);
         }
         break;
     }
 
-    // ── 10. 等待角色选择 → 进入游戏 ──
+    // ── 10. 确认服务器 ──
+    case LoginPhase::ConfirmServer:
+    {
+        cv::Mat frame = screenToMat();
+        QPoint center;
+        bool found = !frame.empty() && matchTemplate(frame, "服务器确定", &center, 0.6);
+
+        if (found) {
+            loginLog(QString("✅ 点击确认 (%1,%2)").arg(center.x()).arg(center.y()));
+            humanClick(center.x(), center.y());
+        } else {
+            pressKey(KEY_RETURN);
+        }
+        QThread::msleep(2000);
+
+        transitionTo(LoginPhase::WaitCharSelect);
+        m_retryCount++;
+        break;
+    }
+
+    // ── 11. 等待角色选择 ──
     case LoginPhase::WaitCharSelect:
     {
-        if (m_phaseTicks < 3) { break; }
-
+        if (m_phaseTicks > 12) {
+            transitionTo(LoginPhase::EnterGame);
+            return;
+        }
         cv::Mat frame = screenToMat();
-        if (frame.empty()) {
-            if (++m_retryCount > MAX_RETRIES + 10) { cancel(); }
+        if (frame.empty()) return;
+
+        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", nullptr, 0.30)) {
+            transitionTo(LoginPhase::EnterGame);
+        }
+        break;
+    }
+
+    // ── 12. 进入游戏 ──
+    case LoginPhase::EnterGame:
+    {
+        cv::Mat frame = screenToMat();
+        QPoint center;
+        if (!frame.empty() && matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.30)) {
+            humanClick(center.x(), center.y());
+        } else {
+            pressKey(KEY_RETURN);
+        }
+        QThread::msleep(3000);
+
+        transitionTo(LoginPhase::VerifyInGame);
+        emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
+        break;
+    }
+
+    // ── 13. 验证已进入游戏 ──
+    case LoginPhase::VerifyInGame:
+    {
+        // 等 60 tick（~48秒），游戏加载可能很慢
+        if (m_phaseTicks > 60) {
+            loginLog("❌ 登录验证超时");
+            cancel();
             return;
         }
 
-        auto result = GameUtils::Instance().bestMatch(frame, GameUtils::Instance().templateRoot() + "/login", "进入游戏");
-        if (result.confidence >= 0.5) {
-            QPoint screenPos = frameToScreen(
-                QPoint(result.centerX, result.centerY), m_gameHwnd);
-            humanClick(screenPos.x(), screenPos.y());
-            QThread::msleep(2000);
+        cv::Mat frame = screenToMat();
+        // 空帧不消耗重试（游戏中加载/黑屏时 D3D11 可能截不到）
+        if (frame.empty()) {
+            return;
         }
 
-        transitionTo(LoginPhase::VerifyInGame);
-        break;
-    }
+        auto &gu = GameUtils::Instance();
 
-    // ── 11. 验证进入游戏 ──
-    case LoginPhase::VerifyInGame:
-    {
-        if (m_phaseTicks > 15) {
-            loginLog("✅ 进入游戏完成");
+        auto locMatch = gu.detectLocation(frame);
+        bool hasLocation = !locMatch.name.isEmpty() && locMatch.confidence > 0.6;
+
+        if (hasLocation) {
+            m_slot->setLoggedIn(true);
+            loginLog(QString("✅ 登录成功！ location=%1")
+                .arg(locMatch.name.toStdString()));
             transitionTo(LoginPhase::Done);
-            emit statusMessage(QString("[窗口%1] 登录成功")
+            emit statusMessage(QString("[窗口%1] 登录成功！")
                 .arg(m_slot->index() + 1));
             emit finished(true);
+            return;
         }
+
         break;
     }
-
-    case LoginPhase::Done:
-    case LoginPhase::Failed:
-        break;
 
     default:
-        loginLog(QString("未知阶段: %1").arg((int)m_phase));
         break;
     }
 }
 
 // ════════════════════════════════════════════════
-// 截图坐标 → 屏幕绝对坐标
+// 视觉检测
 // ════════════════════════════════════════════════
-QPoint AutoLogin::frameToScreen(const QPoint &framePt, HWND hwnd)
+bool AutoLogin::matchTemplate(const cv::Mat &frame, const QString &tplName,
+                              QPoint *outCenter, double minConf)
 {
-    if (!hwnd) return framePt;
-    RECT wndRect;
-    if (!GetWindowRect(hwnd, &wndRect)) return framePt;
-    return QPoint(wndRect.left + framePt.x(), wndRect.top + framePt.y());
+    if (frame.empty()) return false;
+    auto &gu = GameUtils::Instance();
+    auto result = gu.bestMatch(frame, gu.templateRoot() + "/login", tplName);
+    bool ok = result.confidence > minConf;
+    if (ok && outCenter) {
+        outCenter->setX(result.centerX);
+        outCenter->setY(result.centerY);
+    }
+    return ok;
 }
 
 // ════════════════════════════════════════════════
-// 硬件鼠标点击
+// 动作
 // ════════════════════════════════════════════════
 void AutoLogin::humanClick(int sx, int sy)
 {
-    MouseKeyboardManager::Instance().moveMouse(sx, sy);
-    QThread::msleep(50);
-    MouseKeyboardManager::Instance().mouseClick();
+    auto &km = MouseKeyboardManager::Instance();
+    km.mouseMoveDirect(sx, sy);
+    QThread::msleep(80);
+    km.mouseClick();
+    loginLog(QString("点击 (%1,%2)").arg(sx).arg(sy));
 }
 
-// ════════════════════════════════════════════════
-// 键盘输入（通过 Arduino）
-// ════════════════════════════════════════════════
 void AutoLogin::typeText(const QString &text)
 {
-    for (const QChar &ch : text) {
-        MouseKeyboardManager::Instance().clickButton(QString(ch));
-        QThread::msleep(50 + (QRandomGenerator::global()->bounded(70)));
+    auto &km = MouseKeyboardManager::Instance();
+    for (QChar ch : text) {
+        char c = ch.toLatin1();
+
+        if (c == '@') {
+            // @ = Shift + 2
+            km.keyPress(KEY_LEFT_SHIFT);  QThread::msleep(30);
+            km.clickButton('2');
+            km.keyRelease(KEY_LEFT_SHIFT);
+        } else {
+            km.clickButton(c);
+        }
+        QThread::msleep(50 + (rand() % 70));
     }
 }
 
@@ -473,7 +592,7 @@ void AutoLogin::pressKey(int vkCode)
 }
 
 // ════════════════════════════════════════════════
-// 状态转换
+// 工具
 // ════════════════════════════════════════════════
 void AutoLogin::transitionTo(LoginPhase next)
 {
@@ -509,3 +628,5 @@ void AutoLogin::loginLog(const QString &msg)
     QString log = QString("[登录%1] %2").arg(m_slot->index() + 1).arg(msg);
     infof(log.toStdString());
 }
+
+

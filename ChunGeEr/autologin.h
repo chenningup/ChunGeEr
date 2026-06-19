@@ -1,4 +1,4 @@
-﻿#ifndef AUTOLOGIN_H
+#ifndef AUTOLOGIN_H
 #define AUTOLOGIN_H
 
 #include <QObject>
@@ -62,7 +62,6 @@ private:
     void    humanClick(int sx, int sy);
     void    typeText(const QString &text);
     void    pressKey(int vkCode);
-    QPoint  frameToScreen(const QPoint &framePt, HWND hwnd);
 
     // ── 工具 ──
     void    transitionTo(LoginPhase next);

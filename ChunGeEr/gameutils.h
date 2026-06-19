@@ -87,7 +87,7 @@ private:
     QHash<QString, cv::Mat> m_templateCache;
     cv::Mat loadCachedTemplate(const QString &path);
 
-    double m_matchThreshold = 0.6;
+    double m_matchThreshold = 0.15;
 
     // 固定裁剪区域
     QRect m_roiLocation;

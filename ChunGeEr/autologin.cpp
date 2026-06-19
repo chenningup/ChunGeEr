@@ -171,7 +171,7 @@ void AutoLogin::processState()
         }
 
         QPoint center;
-        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.6)) {
+        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.80)) {
             loginLog(QString("✅ 检测到开始游戏按钮 (%1,%2)")
                 .arg(center.x()).arg(center.y()));
             humanClick(center.x(), center.y());
@@ -252,7 +252,7 @@ void AutoLogin::processState()
         }
 
         // 等登录界面出现（用整张登录界面模板匹配）
-        bool hasLoginScreen = matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.18);
+        bool hasLoginScreen = matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.80);
         if (hasLoginScreen) {
             loginLog("✅ 加载完成，检测到登录界面");
 
@@ -300,7 +300,7 @@ void AutoLogin::processState()
         }
 
         // 用整张登录界面模板确认
-        if (matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.18)) {
+        if (matchTemplate(frame, "\u767b\u5f55\u754c\u9762", nullptr, 0.80)) {
             loginLog("✅ 登录界面确认");
 
             // 登录界面出来后设窗口位置和大小（游戏已完全加载，SetWindowPos生效）
@@ -351,7 +351,7 @@ void AutoLogin::processState()
 
         // 找到账号标签，往右点（输入框在标签右边）
         QPoint accPt;
-        if (matchTemplate(frame, "\u8d26\u53f7", &accPt, 0.6)) {
+        if (matchTemplate(frame, "\u8d26\u53f7", &accPt, 0.80)) {
             int clickX = accPt.x() + 80;  // 往右偏移到输入框
             int clickY = accPt.y();
             loginLog(QString("✅ 检测到账号标签 (%1,%2) → 点击输入框 (%3,%4)")
@@ -386,7 +386,7 @@ void AutoLogin::processState()
 
         // 找到密码标签，往右点（输入框在标签右边）
         QPoint pwdPt;
-        if (matchTemplate(frame, "\u5bc6\u7801", &pwdPt, 0.6)) {
+        if (matchTemplate(frame, "\u5bc6\u7801", &pwdPt, 0.80)) {
             int clickX = pwdPt.x() + 80;  // 往右偏移到输入框
             int clickY = pwdPt.y();
             loginLog(QString("✅ 检测到密码标签 (%1,%2) → 点击输入框 (%3,%4)")
@@ -415,7 +415,7 @@ void AutoLogin::processState()
     {
         cv::Mat frame = screenToMat();
         QPoint center;
-        bool found = !frame.empty() && matchTemplate(frame, "\u767b\u5f55", &center, 0.6);
+        bool found = !frame.empty() && matchTemplate(frame, "\u767b\u5f55", &center, 0.80);
 
         if (found) {
             loginLog(QString("✅ 点击登录按钮 (%1,%2)").arg(center.x()).arg(center.y()));
@@ -442,7 +442,7 @@ void AutoLogin::processState()
         cv::Mat frame = screenToMat();
         if (frame.empty()) return;
 
-        if (matchTemplate(frame, "服务器确定", nullptr, 0.55)) {
+        if (matchTemplate(frame, "服务器确定", nullptr, 0.80)) {
             transitionTo(LoginPhase::ConfirmServer);
         }
         break;
@@ -453,7 +453,7 @@ void AutoLogin::processState()
     {
         cv::Mat frame = screenToMat();
         QPoint center;
-        bool found = !frame.empty() && matchTemplate(frame, "服务器确定", &center, 0.6);
+        bool found = !frame.empty() && matchTemplate(frame, "服务器确定", &center, 0.80);
 
         if (found) {
             loginLog(QString("✅ 点击确认 (%1,%2)").arg(center.x()).arg(center.y()));
@@ -472,20 +472,25 @@ void AutoLogin::processState()
     case LoginPhase::WaitCharSelect:
     {
         if (m_phaseTicks > 20) {
-            loginLog("⚠️ 角色选择界面超时，尝试直接进入");
+            loginLog("⚠ 角色选择界面超时，尝试直接进入");
             transitionTo(LoginPhase::EnterGame);
             return;
         }
         cv::Mat frame = screenToMat();
         if (frame.empty()) return;
 
-        if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", nullptr, 0.30) ||
-            matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", nullptr, 0.30)) {
-            // 到了角色选择界面，分叉
-            if (m_slot->charName().isEmpty())
+        // 判断有无角色：灰色空槽位 vs 金色角色按钮
+        bool noChar = matchTemplate(frame, "\u6ca1\u6709\u89d2\u8272", nullptr, 0.80);
+        bool canCreate = matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", nullptr, 0.80);
+
+        if (noChar || canCreate) {
+            if (noChar) {
+                loginLog("🔍 灰色空槽位 → 无角色");
                 transitionTo(LoginPhase::CharCreate);
-            else
+            } else {
+                loginLog("🔍 金色角色按钮 → 有角色");
                 transitionTo(LoginPhase::CharSelect);
+            }
         }
         break;
     }
@@ -493,17 +498,25 @@ void AutoLogin::processState()
     // ── 12. 选择已有角色 → 进入游戏 ──
     case LoginPhase::CharSelect:
     {
-        loginLog(QString("选择角色: %1").arg(m_slot->charName()));
+        loginLog(QString("有角色, 进入游戏..."));
         cv::Mat frame = screenToMat();
-        QPoint center;
-        if (!frame.empty() && matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.30)) {
-            // TODO: 如果多个角色槽，先点角色再点进入游戏
-            // 目前假定角色已选中，直接点进入游戏
-            humanClick(center.x(), center.y());
+        if (frame.empty()) return;
+
+        QPoint createBtn;
+        if (matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", &createBtn, 0.80)) {
+            // 角色槽位在"创建角色"按钮上方
+            // TODO: 用金色角色按钮模板精确点击
+            QPoint charSlot(createBtn.x(), createBtn.y() - 150);
+            loginLog(QString("点击角色槽位 (%1,%2)").arg(charSlot.x()).arg(charSlot.y()));
+            humanClick(charSlot.x(), charSlot.y());
             QThread::msleep(3000);
-            transitionTo(LoginPhase::VerifyInGame);
-            emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
+        } else {
+            loginLog("⚠ 未找到创建角色按钮, 尝试点击屏幕中央");
+            humanClick(frame.cols / 2, frame.rows / 2);
+            QThread::msleep(3000);
         }
+        transitionTo(LoginPhase::VerifyInGame);
+        emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
         break;
     }
 
@@ -516,7 +529,7 @@ void AutoLogin::processState()
         // 阶段0: 在角色列表页，点"创建角色"
         if (m_charCreateStep == 0) {
             QPoint center;
-            if (matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", &center, 0.40)) {
+            if (matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", &center, 0.80)) {
                 loginLog("点击创建角色");
                 humanClick(center.x(), center.y());
                 m_charCreateStep = 1;
@@ -540,7 +553,7 @@ void AutoLogin::processState()
             }
             // 模板匹配门派图标（需 images/roles/门派名.png）
             QPoint fc;
-            if (matchTemplate(frame, faction, &fc, 0.50)) {
+            if (matchTemplate(frame, faction, &fc, 0.80)) {
                 loginLog(QString("选择门派: %1").arg(faction));
                 humanClick(fc.x(), fc.y());
                 m_charCreateStep = 2;
@@ -572,8 +585,8 @@ void AutoLogin::processState()
                 return;
             }
             QPoint ok;
-            if (matchTemplate(frame, "\u786e\u5b9a", &ok, 0.40) ||
-                matchTemplate(frame, "\u521b\u5efa", &ok, 0.40)) {
+            if (matchTemplate(frame, "\u786e\u5b9a", &ok, 0.80) ||
+                matchTemplate(frame, "\u521b\u5efa", &ok, 0.80)) {
                 loginLog("点击确认创建");
                 humanClick(ok.x(), ok.y());
                 QThread::msleep(2000);
@@ -592,7 +605,7 @@ void AutoLogin::processState()
     {
         cv::Mat frame = screenToMat();
         QPoint center;
-        if (!frame.empty() && matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.30)) {
+        if (!frame.empty() && matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.80)) {
             humanClick(center.x(), center.y());
         } else {
             pressKey(KEY_RETURN);

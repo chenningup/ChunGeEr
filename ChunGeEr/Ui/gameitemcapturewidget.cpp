@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QScrollArea>
+#include <QMenu>
 #include "../Ocr/ocrmnager.h"
 
 // ════════════════════════════════════════════════
@@ -154,6 +155,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     m_itemTree->setHeaderHidden(true);
     m_itemTree->setIndentation(12);
     m_itemTree->setSelectionMode(QAbstractItemView::MultiSelection);
+    m_itemTree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_itemTree->setStyleSheet(
         "QTreeWidget { background-color: #222; border: 1px solid #333; color: #ccc; }"
         "QTreeWidget::item:selected { background-color: #3a3a5a; }");
@@ -178,6 +180,25 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     connect(m_testBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onTestMatch);
     connect(m_ocrBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onOcrRecognize);
     connect(m_dirBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onSelectSaveDir);
+    connect(m_itemTree, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        QTreeWidgetItem *item = m_itemTree->itemAt(pos);
+        if (!item || item->data(0, Qt::UserRole).toString() == "__CATEGORY__") return;
+        QString filePath = item->data(0, Qt::UserRole).toString();
+        if (filePath.isEmpty()) return;
+        QMenu menu;
+        QAction *delAction = menu.addAction(QString::fromUtf8("\U0001f5d1 \u5220\u9664"));
+        QAction *chosen = menu.exec(m_itemTree->viewport()->mapToGlobal(pos));
+        if (chosen == delAction) {
+            if (QFile::remove(filePath)) {
+                m_templateCache.remove(filePath);
+                delete item;
+                rebuildActivePaths();
+            } else {
+                QMessageBox::warning(this, QString::fromUtf8("\u9519\u8bef"),
+                    QString::fromUtf8("\u5220\u9664\u5931\u8d25: ") + filePath);
+            }
+        }
+    });
     connect(m_itemTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
         if (!m_loadingList) rebuildActivePaths();
     });
@@ -326,7 +347,7 @@ void GameItemCaptureWidget::onCaptureTick()
                           cv::Point(maxLoc.x + templ.cols, maxLoc.y + templ.rows),
                           cv::Scalar(0, 255, 0), 2);
             cv::putText(displayFrame,
-                        QString("%1 %.2f").arg(fi.baseName()).arg(maxVal).toStdString(),
+                        std::to_string(maxVal).substr(0, 4),
                         cv::Point(maxLoc.x, maxLoc.y - 5),
                         cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 255, 0), 1);
         }
@@ -484,7 +505,7 @@ void GameItemCaptureWidget::onTestMatch()
                       cv::Point(maxLoc.x + templ.cols, maxLoc.y + templ.rows),
                       cv::Scalar(0, 255, 0), 2);
         cv::putText(displayFrame,
-                    fi.baseName().toStdString(),
+                    std::to_string(maxVal).substr(0, 4),
                     cv::Point(maxLoc.x, maxLoc.y - 5),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
     }

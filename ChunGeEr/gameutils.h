@@ -29,6 +29,9 @@ public:
     /// 设置模板根目录（images/ 路径）
     void setTemplateRoot(const QString &root);
 
+    /// 从config.ini加载ROI配置（窗口相对坐标）
+    void loadROIs();
+
     /// ── 裁剪区域配置（相对游戏窗口坐标）──
 
     // 地图名区域

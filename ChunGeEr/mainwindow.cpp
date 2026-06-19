@@ -74,6 +74,7 @@ MainWindow::MainWindow(QWidget *parent)
     OcrMnager::Instance().init();
     OcrMnager::Instance().setEngine(OcrMnager::EngineTesseract);
     GameUtils::Instance().setTemplateRoot(QCoreApplication::applicationDirPath() + "/images");
+    GameUtils::Instance().loadROIs();
     init();
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&MainWindow::clientRecMegSlot,Qt::QueuedConnection);
     connect(&WsManager::Instance(),&WsManager::serverRecMeg,this,&MainWindow::serverRecMegSlot,Qt::QueuedConnection);

@@ -11,6 +11,8 @@
 #include <QFileInfo>
 #include <QScrollArea>
 #include <QMenu>
+#include <QSettings>
+#include <QCoreApplication>
 #include "../Ocr/ocrmnager.h"
 
 // ════════════════════════════════════════════════
@@ -104,6 +106,7 @@ void CaptureImageLabel::mouseReleaseEvent(QMouseEvent *event)
 GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     : QWidget(parent)
     , m_paused(false)
+    , m_roiMode(false)
     , m_saveDir("D:/coding/8_mProject/10_ChungGeEr/ChunGeEr/images")
     , m_lastCategoryIdx(0)
     , m_loadingList(false)
@@ -127,6 +130,17 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     m_ocrBtn = new QPushButton(QString::fromUtf8("📝 OCR识别"), this);
     m_dirBtn = new QPushButton(QString::fromUtf8("📁 选择目录"), this);
 
+    m_roiTypeCombo = new QComboBox(this);
+    m_roiTypeCombo->addItems({
+        QString::fromUtf8("地图名"), QString::fromUtf8("等级"),
+        QString::fromUtf8("技能"), QString::fromUtf8("主线任务"),
+        QString::fromUtf8("掉线"), QString::fromUtf8("卡住")
+    });
+    m_roiTypeCombo->setMinimumWidth(90);
+    m_roiTypeCombo->setVisible(false);
+
+    m_roiBtn = new QPushButton(QString::fromUtf8("🎯 ROI模式"), this);
+
     m_nameEdit = new QLineEdit(this);
     m_nameEdit->setPlaceholderText(QString::fromUtf8("输入物品名称（如：回血丹）"));
     m_nameEdit->setMinimumWidth(180);
@@ -140,6 +154,8 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     topLayout->addWidget(m_testBtn);
     topLayout->addWidget(m_ocrBtn);
     topLayout->addWidget(m_nameEdit);
+    topLayout->addWidget(m_roiTypeCombo);
+    topLayout->addWidget(m_roiBtn);
     topLayout->addWidget(m_dirBtn);
     topLayout->addStretch();
 
@@ -180,6 +196,27 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     connect(m_testBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onTestMatch);
     connect(m_ocrBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onOcrRecognize);
     connect(m_dirBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onSelectSaveDir);
+    connect(m_roiBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onRoiModeToggle);
+    // ROI模式框选 → 直接保存
+    connect(m_imageLabel, &CaptureImageLabel::selectionChanged, this, [this](const QRect &sel) {
+        if (!m_roiMode || !sel.isValid() || sel.width() < 3 || sel.height() < 3) return;
+        // ROI类型key映射
+        static const QStringList roiKeys = {"Location", "Level", "Skills", "MainQuest", "Disconnect", "Stopped"};
+        int idx = m_roiTypeCombo->currentIndex();
+        if (idx < 0 || idx >= roiKeys.size()) return;
+
+        // 框选区域是pixmap坐标，转换到原始帧坐标
+        QSize pixSize = m_currentPixmap.size();
+        double sx = (double)m_currentFrame.cols / pixSize.width();
+        double sy = (double)m_currentFrame.rows / pixSize.height();
+        int rx = qBound(0, (int)(sel.x() * sx), m_currentFrame.cols - 1);
+        int ry = qBound(0, (int)(sel.y() * sy), m_currentFrame.rows - 1);
+        int rw = qBound(1, (int)(sel.width() * sx), m_currentFrame.cols - rx);
+        int rh = qBound(1, (int)(sel.height() * sy), m_currentFrame.rows - ry);
+
+        saveRoi(roiKeys[idx], QRect(rx, ry, rw, rh));
+        m_imageLabel->clearSelection();
+    });
     connect(m_itemTree, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         QTreeWidgetItem *item = m_itemTree->itemAt(pos);
         if (!item || item->data(0, Qt::UserRole).toString() == "__CATEGORY__") return;
@@ -698,4 +735,51 @@ void GameItemCaptureWidget::addItemToList(const QString &name,
 
     // 更新分类计数
     parent->setText(0, kCatCN[catIdx] + QString(" (%1)").arg(parent->childCount()));
+}
+
+// ════════════════════════════════════════════════
+// ROI模式切换
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::onRoiModeToggle()
+{
+    m_roiMode = !m_roiMode;
+    if (m_roiMode) {
+        m_roiBtn->setText(QString::fromUtf8("🎯 退出ROI"));
+        m_roiBtn->setStyleSheet("background-color: #e67e22; color: white;");
+        m_roiTypeCombo->setVisible(true);
+        m_screenshotBtn->setVisible(false);
+        m_nameEdit->setVisible(false);
+        m_itemTree->setVisible(false);
+        // 自动暂停
+        if (!m_paused) onPauseToggle();
+    } else {
+        m_roiBtn->setText(QString::fromUtf8("🎯 ROI模式"));
+        m_roiBtn->setStyleSheet("");
+        m_roiTypeCombo->setVisible(false);
+        m_screenshotBtn->setVisible(true);
+        m_nameEdit->setVisible(true);
+        m_itemTree->setVisible(true);
+        m_imageLabel->clearSelection();
+    }
+}
+
+// ════════════════════════════════════════════════
+// 保存ROI到config.ini（窗口相对坐标）
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::saveRoi(const QString &roiKey, const QRect &rect)
+{
+    // ROI是窗口相对坐标，存到config.ini
+    QString configPath = QCoreApplication::applicationDirPath() + "/config.ini";
+    QSettings settings(configPath, QSettings::IniFormat);
+    settings.beginGroup("ROIs");
+    settings.setValue(roiKey, QString("%1,%2,%3,%4")
+        .arg(rect.x()).arg(rect.y()).arg(rect.width()).arg(rect.height()));
+    settings.endGroup();
+    settings.sync();
+
+    QMessageBox::information(this,
+        QString::fromUtf8("ROI已保存"),
+        QString::fromUtf8("%1: (%2,%3) %4x%5")
+            .arg(roiKey).arg(rect.x()).arg(rect.y())
+            .arg(rect.width()).arg(rect.height()));
 }

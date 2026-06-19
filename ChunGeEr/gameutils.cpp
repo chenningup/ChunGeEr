@@ -3,11 +3,46 @@
 #include "XuLog.h"
 #include <QDir>
 #include <QFileInfo>
+#include <QCoreApplication>
+#include <QSettings>
+#include <windows.h>
 
 GameUtils &GameUtils::Instance()
 {
     static GameUtils inst;
     return inst;
+}
+
+// ════════════════════════════════════════════════
+// 从config.ini加载所有ROI（窗口相对坐标）
+// ════════════════════════════════════════════════
+void GameUtils::loadROIs()
+{
+    QString configPath = QCoreApplication::applicationDirPath() + "/config.ini";
+    QSettings settings(configPath, QSettings::IniFormat);
+    settings.beginGroup("ROIs");
+
+    auto parse = [&](const QString &key) -> QRect {
+        QString val = settings.value(key).toString();
+        auto parts = val.split(',');
+        if (parts.size() == 4)
+            return QRect(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
+        return QRect();
+    };
+
+    m_roiLocation   = parse("Location");
+    m_roiLevel      = parse("Level");
+    m_roiSkills     = parse("Skills");
+    m_roiMainQuest  = parse("MainQuest");
+    m_roiDisconnect = parse("Disconnect");
+    m_roiStopped    = parse("Stopped");
+
+    settings.endGroup();
+
+    infof("[GU] ROIs loaded: location={}, level={}, skills={}",
+        m_roiLocation.isEmpty() ? "N/A" : QString("%1x%2").arg(m_roiLocation.width()).arg(m_roiLocation.height()).toStdString(),
+        m_roiLevel.isEmpty() ? "N/A" : QString("%1x%2").arg(m_roiLevel.width()).arg(m_roiLevel.height()).toStdString(),
+        m_roiSkills.isEmpty() ? "N/A" : QString("%1x%2").arg(m_roiSkills.width()).arg(m_roiSkills.height()).toStdString());
 }
 
 void GameUtils::setTemplateRoot(const QString &root)
@@ -21,7 +56,31 @@ void GameUtils::setTemplateRoot(const QString &root)
 cv::Mat GameUtils::cropROI(const cv::Mat &frame, const QRect &roi)
 {
     if (frame.empty() || roi.isEmpty()) return {};
-    QRect safe = roi.intersected(QRect(0, 0, frame.cols, frame.rows));
+
+    // ROI存的是窗口相对坐标，需叠加游戏窗口屏幕位置
+    int winX = 0, winY = 0;
+    HWND hwnd = FindWindowW(nullptr, L"\u5927\u5510\u65e0\u53cc\u516c\u6d4b - \u4e03\u4fa0\u4e94\u4e49 (4.0.58:1041281  1.0.5:1039767)");
+    if (!hwnd) {
+        // 模糊匹配
+        HWND h = FindWindowW(nullptr, nullptr);
+        while (h) {
+            wchar_t title[256];
+            GetWindowTextW(h, title, 256);
+            if (wcsstr(title, L"\u5927\u5510\u65e0\u53cc")) { hwnd = h; break; }
+            h = GetWindow(h, GW_HWNDNEXT);
+        }
+    }
+    if (hwnd) {
+        RECT wr;
+        if (GetWindowRect(hwnd, &wr)) {
+            winX = wr.left;
+            winY = wr.top;
+        }
+    }
+
+    // 窗口相对 → 屏幕绝对
+    QRect screenROI(roi.x() + winX, roi.y() + winY, roi.width(), roi.height());
+    QRect safe = screenROI.intersected(QRect(0, 0, frame.cols, frame.rows));
     if (safe.isEmpty()) return {};
     cv::Rect sr(safe.x(), safe.y(), safe.width(), safe.height());
     return frame(sr).clone();

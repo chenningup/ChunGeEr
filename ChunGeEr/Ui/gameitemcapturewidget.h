@@ -60,6 +60,7 @@ private slots:
     void onOcrRecognize();          // OCR识别框选区域
     void onCaptureTick();           // 定时截图刷新
     void onSelectSaveDir();         // 选择保存目录
+    void onRoiModeToggle();         // ROI模式切换
 
 private:
     HWND findGameWindow();                       // 找游戏窗口
@@ -68,6 +69,7 @@ private:
     void addItemToList(const QString &name, const QPixmap &pixmap, const QString &filePath);
     void loadImagesFromDir();
     void rebuildActivePaths();                   // 从列表选中项重建路径+缓存
+    void saveRoi(const QString &roiKey, const QRect &rect);  // 保存ROI到config
 
     // ── UI控件 ──
     QTimer          *m_captureTimer;
@@ -79,10 +81,13 @@ private:
     QPushButton     *m_testBtn;
     QPushButton     *m_ocrBtn;
     QPushButton     *m_dirBtn;
+    QPushButton     *m_roiBtn;
+    QComboBox       *m_roiTypeCombo;
     QLineEdit       *m_nameEdit;
 
     // ── 状态 ──
     bool     m_paused;
+    bool     m_roiMode;
     cv::Mat  m_currentFrame;
     QPixmap  m_currentPixmap;
     QString  m_saveDir;

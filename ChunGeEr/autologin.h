@@ -50,6 +50,10 @@ public:
 signals:
     void statusMessage(const QString &msg);
     void finished(bool success);
+    void captchaRequired(int slotIndex);   // 需要人工输入验证码
+
+public slots:
+    void onCaptchaDone();                   // 用户点击"验证码已填"后调用
 
 private slots:
     void processState();
@@ -58,7 +62,7 @@ private slots:
 private:
     // ── 视觉检测 ──
     cv::Mat screenToMat();
-    bool    matchTemplate(const cv::Mat &frame, const QString &tplName, QPoint *outCenter = nullptr, double minConf = 0.65);
+    bool    matchTemplate(const cv::Mat &frame, const QString &tplName, QPoint *outCenter = nullptr, double minConf = 0.65, const QString &subDir = {});
 
     // ── 动作 ──
     void    humanClick(int sx, int sy);
@@ -79,6 +83,7 @@ private:
     int        m_retryCount = 0;
     int        m_phaseTicks = 0;
     int        m_charCreateStep = 0; // CharCreate 子阶段
+    bool       m_captchaPending = false;  // 等待验证码
     HWND       m_launcherHwnd = nullptr;
     HWND       m_gameHwnd = nullptr;
 

@@ -87,6 +87,7 @@ private:
     void loginNextSlot();               // 登录下一个窗口
     void onLoginFinished(bool success);  // 单个窗口登录完成回调
     void onAllLoginDone();              // 所有窗口登录完成，启动任务调度
+    void onCaptchaRequired(int slotIndex); // 需要人工输入验证码
 
     Ui::MainWindow *ui;
     ScreenShareWidget *screenShareUi;
@@ -103,6 +104,9 @@ private:
     AutoLogin *m_currentLogin = nullptr; // 当前登录实例
     QHash<int, AutoLogin*> m_autoLogins; // 每个窗口的 AutoLogin 实例
     int m_loginSuccessCount = 0;
+
+    // ── 验证码 ──
+    QPushButton *m_captchaBtn = nullptr;  // "验证码已填，继续"按钮
 
     // ── 模式切换 ──
     QStackedWidget *m_modeStack = nullptr;

@@ -536,6 +536,7 @@ void MainWindow::loginNextSlot()
     m_autoLogins.insert(m_currentLoginIdx, m_currentLogin);
 
     connect(m_currentLogin, &AutoLogin::finished, this, &MainWindow::onLoginFinished);
+    connect(m_currentLogin, &AutoLogin::captchaRequired, this, &MainWindow::onCaptchaRequired);
     connect(m_currentLogin, &AutoLogin::statusMessage, this, [this](const QString &msg) {
         ui->statuslabel->setText(msg);
         ui->textEdit->append(msg);
@@ -578,6 +579,15 @@ void MainWindow::onLoginFinished(bool success)
     loginNextSlot();
 }
 
+
+void MainWindow::onCaptchaRequired(int slotIndex)
+{
+    if (m_captchaBtn) {
+        m_captchaBtn->setText(QString::fromUtf8("窗口%1 验证码已填 ▶").arg(slotIndex + 1));
+        m_captchaBtn->show();
+    }
+    ui->statuslabel->setText(QString::fromUtf8("窗口%1 请输入验证码").arg(slotIndex + 1));
+}
 void MainWindow::onAllLoginDone()
 {
     if (m_loginSuccessCount == 0) {
@@ -617,6 +627,19 @@ void MainWindow::setupAccountTaskUI()
     tbLayout->addWidget(ui->itemCaptureButton);
     connect(ui->itemCaptureButton, &QPushButton::clicked,
             this, &MainWindow::openItemCapture);
+
+    // 验证码按钮（默认隐藏，创建角色时显示）
+    m_captchaBtn = new QPushButton(QString::fromUtf8("验证码已填"));
+    m_captchaBtn->setFixedHeight(22);
+    m_captchaBtn->setStyleSheet("QPushButton { background-color: #e67e22; color: #fff; font-weight: bold; border-radius: 3px; padding: 0 10px; } QPushButton:hover { background-color: #d35400; }");
+    m_captchaBtn->hide();
+    tbLayout->addWidget(m_captchaBtn);
+    connect(m_captchaBtn, &QPushButton::clicked, this, [this]() {
+        if (m_currentLogin) {
+            m_currentLogin->onCaptchaDone();
+            m_captchaBtn->hide();
+        }
+    });
 
     tbLayout->addStretch();
 

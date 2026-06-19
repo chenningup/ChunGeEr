@@ -1,4 +1,4 @@
-#include "autologin.h"
+﻿#include "autologin.h"
 #include "gameutils.h"
 #include "gameslot.h"
 #include "LeoControl/mousekeyboardmanager.h"
@@ -464,11 +464,11 @@ void AutoLogin::processState()
         QThread::msleep(2000);
 
         transitionTo(LoginPhase::WaitCharSelect);
-        m_retryCount++;
         break;
     }
 
     // ── 11. 等待角色选择 ──
+    // ── 11. 等待角色选择 → 只有一个角色, 默认已选中, 直接点进入游戏 ──
     case LoginPhase::WaitCharSelect:
     {
         if (m_phaseTicks > 20) {
@@ -479,52 +479,32 @@ void AutoLogin::processState()
         cv::Mat frame = screenToMat();
         if (frame.empty()) return;
 
-        // 判断有无角色：灰色空槽位 vs 金色角色按钮
-        bool noChar = matchTemplate(frame, "\u6ca1\u6709\u89d2\u8272", nullptr, 0.80);
-        bool canCreate = matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", nullptr, 0.80);
-
-        if (noChar || canCreate) {
-            if (noChar) {
-                loginLog("🔍 灰色空槽位 → 无角色");
-                transitionTo(LoginPhase::CharCreate);
-            } else {
-                loginLog("🔍 金色角色按钮 → 有角色");
-                transitionTo(LoginPhase::CharSelect);
-            }
+        // 先看"进入游戏"按钮：有=角色已选中, 直接进
+        QPoint enterPt;
+        if (matchTemplate(frame, "\u8fdb\u5165\u6e38\u620f", &enterPt, 0.80)) {
+            loginLog(QString("点击进入游戏 (%1,%2)").arg(enterPt.x()).arg(enterPt.y()));
+            humanClick(enterPt.x(), enterPt.y());
+            QThread::msleep(3000);
+            transitionTo(LoginPhase::VerifyInGame);
+            emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
+            break;
         }
-        break;
-    }
 
-    // ── 12. 选择已有角色 → 进入游戏 ──
-    case LoginPhase::CharSelect:
-    {
-        loginLog(QString("有角色, 进入游戏..."));
-        cv::Mat frame = screenToMat();
-        if (frame.empty()) return;
-
+        // 没有进入游戏 → 可能没角色, 看"创建角色"按钮
         QPoint createBtn;
         if (matchTemplate(frame, "\u521b\u5efa\u89d2\u8272", &createBtn, 0.80)) {
-            // 角色槽位在"创建角色"按钮上方
-            // TODO: 用金色角色按钮模板精确点击
-            QPoint charSlot(createBtn.x(), createBtn.y() - 150);
-            loginLog(QString("点击角色槽位 (%1,%2)").arg(charSlot.x()).arg(charSlot.y()));
-            humanClick(charSlot.x(), charSlot.y());
-            QThread::msleep(3000);
-        } else {
-            loginLog("⚠ 未找到创建角色按钮, 尝试点击屏幕中央");
-            humanClick(frame.cols / 2, frame.rows / 2);
-            QThread::msleep(3000);
+            loginLog("🔍 无进入游戏按钮, 有创建角色 → 去创建");
+            transitionTo(LoginPhase::CharCreate);
         }
-        transitionTo(LoginPhase::VerifyInGame);
-        emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
         break;
     }
 
-    // ── 13. 创建新角色 ──
+    // ── 12. 创建新角色 ──
     case LoginPhase::CharCreate:
     {
         cv::Mat frame = screenToMat();
         if (frame.empty()) return;
+
 
         // 阶段0: 在角色列表页，点"创建角色"
         if (m_charCreateStep == 0) {
@@ -551,11 +531,11 @@ void AutoLogin::processState()
                 transitionTo(LoginPhase::Failed);
                 return;
             }
-            // 模板匹配门派图标（需 images/roles/门派名.png）
             QPoint fc;
-            if (matchTemplate(frame, faction, &fc, 0.80)) {
+            if (matchTemplate(frame, faction, &fc, 0.80, "roles")) {
                 loginLog(QString("选择门派: %1").arg(faction));
                 humanClick(fc.x(), fc.y());
+                QThread::msleep(500);
                 m_charCreateStep = 2;
                 m_phaseTicks = 0;
             } else {
@@ -564,38 +544,53 @@ void AutoLogin::processState()
             return;
         }
 
-        // 阶段2: 输入角色名
+        // 阶段2: 点角色名输入框 → 输名字 → 必出验证码 → 阻塞等待
         if (m_charCreateStep == 2) {
-            if (m_phaseTicks == 0) {
-                QThread::msleep(500);
+            if (m_phaseTicks > 10) {
+                loginLog("⚠️ 未找到角色名输入框");
+                transitionTo(LoginPhase::Failed);
+                return;
+            }
+            QPoint namePt;
+            if (matchTemplate(frame, "\u89d2\u8272\u540d", &namePt, 0.80)) {
+                // 标签在左，输入框在右
+                humanClick(namePt.x() + 80, namePt.y());
+                QThread::msleep(300);
                 QString name = m_slot->charName();
                 loginLog(QString("输入角色名: %1").arg(name));
                 typeText(name);
+                QThread::msleep(200);
+                pressKey(KEY_RETURN);  // 回车确认名字
+                QThread::msleep(300);
+                // 验证码必出，立即阻塞等用户填写
+                m_captchaPending = true;
+                emit captchaRequired(m_slot->index());
+                loginLog("🔐 验证码弹窗, 等待人工输入...");
                 m_charCreateStep = 3;
                 m_phaseTicks = 0;
             }
             return;
         }
 
-        // 阶段3: 确认创建
+        // 阶段3: 等验证码填完 → 点确认创建
         if (m_charCreateStep == 3) {
-            if (m_phaseTicks > 8) {
+            if (m_captchaPending) return;
+            if (m_phaseTicks > 60) {
                 loginLog("⚠️ 确认创建超时");
                 transitionTo(LoginPhase::Failed);
                 return;
             }
             QPoint ok;
-            if (matchTemplate(frame, "\u786e\u5b9a", &ok, 0.80) ||
-                matchTemplate(frame, "\u521b\u5efa", &ok, 0.80)) {
+            if (matchTemplate(frame, "\u89d2\u8272\u547d\u540d\u786e\u5b9a", &ok, 0.80)) {
                 loginLog("点击确认创建");
                 humanClick(ok.x(), ok.y());
-                QThread::msleep(2000);
-                // 创建完成，回到角色选择
+                QThread::msleep(5000);
                 m_charCreateStep = 0;
                 m_phaseTicks = 0;
                 m_retryCount = 0;
-                transitionTo(LoginPhase::WaitCharSelect);
+                transitionTo(LoginPhase::CharSelect);  // 直接选角色进游戏，不回WaitCharSelect
             }
+            return;
         }
         break;
     }
@@ -661,11 +656,12 @@ void AutoLogin::processState()
 // 视觉检测
 // ════════════════════════════════════════════════
 bool AutoLogin::matchTemplate(const cv::Mat &frame, const QString &tplName,
-                              QPoint *outCenter, double minConf)
+                              QPoint *outCenter, double minConf, const QString &subDir)
 {
     if (frame.empty()) return false;
     auto &gu = GameUtils::Instance();
-    auto result = gu.bestMatch(frame, gu.templateRoot() + "/login", tplName);
+    QString dir = subDir.isEmpty() ? gu.templateRoot() + "/login" : gu.templateRoot() + "/" + subDir;
+    auto result = gu.bestMatch(frame, dir, tplName);
     bool ok = result.confidence > minConf;
     if (ok && outCenter) {
         outCenter->setX(result.centerX);
@@ -747,4 +743,8 @@ void AutoLogin::loginLog(const QString &msg)
     infof(log.toStdString());
 }
 
-
+void AutoLogin::onCaptchaDone()
+{
+    loginLog("验证码已填，继续创建角色");
+    m_captchaPending = false;
+}

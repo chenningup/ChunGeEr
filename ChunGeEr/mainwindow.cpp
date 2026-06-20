@@ -473,11 +473,18 @@ void MainWindow::on_startStopBtn_clicked()
     if (m_currentLogin || !m_loginQueue.isEmpty()) {
         m_loginQueue.clear();
         m_currentLoginIdx = -1;
-        if (m_currentLogin) { m_currentLogin->cancel(); }
+        if (m_currentLogin) {
+            QMetaObject::invokeMethod(m_currentLogin, "cancel", Qt::QueuedConnection);
+        }
         for (auto it = m_autoLogins.begin(); it != m_autoLogins.end(); ++it) {
-            if (it.value()) { it.value()->cancel(); it.value()->deleteLater(); }
+            if (it.value()) { QMetaObject::invokeMethod(it.value(), "cancel", Qt::QueuedConnection); }
+        }
+        // 退出所有登录工作线程
+        for (auto it = m_loginThreads.begin(); it != m_loginThreads.end(); ++it) {
+            if (it.value()) { it.value()->quit(); it.value()->wait(3000); }
         }
         m_autoLogins.clear();
+        m_loginThreads.clear();
         m_currentLogin = nullptr;
         m_loginSuccessCount = 0;
         for (auto it = m_activeTaskRows.begin(); it != m_activeTaskRows.end(); ++it) {
@@ -532,10 +539,17 @@ void MainWindow::loginNextSlot()
     QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
     QString gamePath = settings.value("Accounts/GamePath").toString();
 
-    // 创建 AutoLogin 实例
-    m_currentLogin = new AutoLogin(slot, this);
+    // 创建 AutoLogin 实例 → 移到独立工作线程（避免 msleep 阻塞主线程事件循环）
+    QThread *loginThread = new QThread(this);
+    m_currentLogin = new AutoLogin(slot);  // 不能传 parent, moveToThread 要求无父对象
+    m_currentLogin->moveToThread(loginThread);
     m_autoLogins.insert(m_currentLoginIdx, m_currentLogin);
+    m_loginThreads.insert(m_currentLoginIdx, loginThread);
 
+    // 线程清理（注意：不在 finished 时 quit，因为登录完成后还要 startPostInit）
+    connect(loginThread, &QThread::finished, loginThread, &QObject::deleteLater);
+
+    // 信号回主线程（Qt::AutoConnection 在跨线程时自动排队）
     connect(m_currentLogin, &AutoLogin::finished, this, &MainWindow::onLoginFinished);
     connect(m_currentLogin, &AutoLogin::postInitDone, this, &MainWindow::onPostInitDone);
     connect(m_currentLogin, &AutoLogin::captchaRequired, this, &MainWindow::onCaptchaRequired);
@@ -548,7 +562,9 @@ void MainWindow::loginNextSlot()
     addActiveTask(m_currentLoginIdx, QString::fromUtf8("登录中"));
     ui->statuslabel->setText(QString::fromUtf8("窗口%1 登录中...").arg(m_currentLoginIdx + 1));
 
-    m_currentLogin->start(gamePath);
+    loginThread->start();
+    // 用 invokeMethod 确保 start() 在登录线程执行（timer 在正确的线程里创建/启动）
+    QMetaObject::invokeMethod(m_currentLogin, "start", Qt::QueuedConnection, Q_ARG(QString, gamePath));
 }
 
 void MainWindow::onLoginFinished(bool success)
@@ -566,7 +582,7 @@ void MainWindow::onLoginFinished(bool success)
             if (m_statusLabels[idx]) { m_statusLabels[idx]->setText(QString::fromUtf8("\u5df2\u767b\u5f55")); m_statusLabels[idx]->setStyleSheet("color: #090;"); }
             refreshTaskPanel();
             ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功，开始初始化...").arg(idx + 1));
-            m_currentLogin->startPostInit();
+            QMetaObject::invokeMethod(m_currentLogin, "startPostInit", Qt::QueuedConnection);
             return;
         } else {
             slot->setState(GameSlot::Idle);
@@ -577,7 +593,12 @@ void MainWindow::onLoginFinished(bool success)
         ui->textEdit->append(QString::fromUtf8("登录已取消"));
     }
 
-    // 继续登录下一个
+    // 清理登录线程
+    if (m_loginThreads.contains(idx)) {
+        QThread *t = m_loginThreads.take(idx);
+        t->quit(); t->wait(3000);
+    }
+    m_autoLogins.remove(idx);
     m_currentLogin = nullptr;
     m_currentLoginIdx = -1;
     loginNextSlot();
@@ -586,6 +607,12 @@ void MainWindow::onLoginFinished(bool success)
 void MainWindow::onPostInitDone(int slotIndex)
 {
     ui->textEdit->append(QString::fromUtf8("窗口%1 初始化完成，继续下一个").arg(slotIndex + 1));
+    // 清理登录线程
+    if (m_loginThreads.contains(slotIndex)) {
+        QThread *t = m_loginThreads.take(slotIndex);
+        t->quit(); t->wait(3000);
+    }
+    m_autoLogins.remove(slotIndex);
     m_currentLogin = nullptr;
     m_currentLoginIdx = -1;
     loginNextSlot();
@@ -648,7 +675,7 @@ void MainWindow::setupAccountTaskUI()
     tbLayout->addWidget(m_captchaBtn);
     connect(m_captchaBtn, &QPushButton::clicked, this, [this]() {
         if (m_currentLogin) {
-            m_currentLogin->onCaptchaDone();
+            QMetaObject::invokeMethod(m_currentLogin, "onCaptchaDone", Qt::QueuedConnection);
             m_captchaBtn->hide();
         }
     });

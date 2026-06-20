@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
+#include <QThread>
 #include "nlohmann/json.hpp"
 #include "service/baseservice.h"
 #include "Ui/screensharewidget.h"
@@ -104,6 +105,7 @@ private:
     int m_currentLoginIdx = -1;         // 当前正在登录的窗口
     AutoLogin *m_currentLogin = nullptr; // 当前登录实例
     QHash<int, AutoLogin*> m_autoLogins; // 每个窗口的 AutoLogin 实例
+    QHash<int, QThread*> m_loginThreads; // 每个窗口的登录工作线程
     int m_loginSuccessCount = 0;
 
     // ── 验证码 ──

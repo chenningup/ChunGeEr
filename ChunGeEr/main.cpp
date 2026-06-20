@@ -547,6 +547,7 @@ void ClsTest()
 
 int main(int argc, char *argv[])
 {
+    SetConsoleOutputCP(CP_UTF8);  // 控制台UTF-8, 避免中文乱码
     // ── 命令行模式（不需要 QApplication）────────────────────
     string exePath = argv[0];
     for (int i = 1; i < argc; i++) {

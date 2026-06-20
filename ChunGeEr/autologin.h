@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QProcess>
 #include <QMutex>
+#include <QAtomicInt>
 #include <opencv2/opencv.hpp>
 #include <Windows.h>
 #include "screencapturemanager.h"
@@ -45,10 +46,12 @@ class AutoLogin : public QObject
     Q_OBJECT
 public:
     explicit AutoLogin(GameSlot *slot, QObject *parent = nullptr);
+    ~AutoLogin();
 
     QString phaseText() const;
     QString phaseName(LoginPhase p) const;
 
+public slots:
     void start(const QString &gamePath);
     void startPostInit();
     void cancel();
@@ -72,7 +75,7 @@ private:
     bool    matchTemplate(const cv::Mat &frame, const QString &tplName, QPoint *outCenter = nullptr, double minConf = 0.65, const QString &subDir = {});
 
     // ── 动作 ──
-    void    humanClick(int sx, int sy);
+    void    humanClick(int sx, int sy, int delayMs = 0);
     void    typeText(const QString &text);
     void    pressKey(int vkCode);
 
@@ -98,6 +101,7 @@ private:
     // 截图
     ScreenCaptureManager::ScreenData m_curPic;
     QMutex m_picMutex;
+    QAtomicInt m_frameCount{0};  // 收帧计数（诊断用，跨线程原子访问）
 
     static const int MAX_RETRIES = 8;
     static const int PHASE_TIMEOUT = 20;

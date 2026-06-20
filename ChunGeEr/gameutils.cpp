@@ -36,6 +36,7 @@ void GameUtils::loadROIs()
     m_roiMainQuest  = parse("MainQuest");
     m_roiDisconnect = parse("Disconnect");
     m_roiStopped    = parse("Stopped");
+    m_roiSettingsPanel = parse("SettingsPanel");
 
     settings.endGroup();
 

@@ -58,6 +58,10 @@ public:
     void setStoppedROI(const QRect &r) { m_roiStopped = r; }
     QRect stoppedROI() const { return m_roiStopped; }
 
+    // 设置面板区域（游戏设置/功能页裁剪）
+    void setSettingsPanelROI(const QRect &r) { m_roiSettingsPanel = r; }
+    QRect settingsPanelROI() const { return m_roiSettingsPanel; }
+
     /// ── 检测接口 ──
 
     // 当前地图（模板匹配 locations/），未匹配到返回空
@@ -99,6 +103,7 @@ private:
     QRect m_roiSkills;
     QRect m_roiDisconnect;
     QRect m_roiStopped;
+    QRect m_roiSettingsPanel;
 };
 
 #endif // GAMEUTILS_H

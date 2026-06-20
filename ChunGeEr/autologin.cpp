@@ -17,9 +17,17 @@ AutoLogin::AutoLogin(GameSlot *slot, QObject *parent)
     m_timer->setInterval(m_loopIntervalMs);
     connect(m_timer, &QTimer::timeout, this, &AutoLogin::processState);
 
-    // 订阅 D3D11 桌面截图
+    // 订阅 D3D11 桌面截图（用 DirectConnection 让回调在截图线程直接执行，
+    // 不受工作线程 processState 中 msleep 阻塞事件循环的影响）
     connect(&ScreenCaptureManager::Instance(), &ScreenCaptureManager::capturedScreen,
-            this, &AutoLogin::onCaptureScreen);
+            this, &AutoLogin::onCaptureScreen, Qt::DirectConnection);
+}
+
+AutoLogin::~AutoLogin()
+{
+    if (m_timer) {
+        m_timer->stop();
+    }
 }
 
 QString AutoLogin::phaseText() const
@@ -80,7 +88,13 @@ void AutoLogin::onCaptureScreen(ScreenCaptureManager::ScreenData data)
 {
     m_picMutex.lock();
     m_curPic = data;
+    bool valid = m_curPic.data && !m_curPic.data->empty();
     m_picMutex.unlock();
+    int fc = ++m_frameCount;
+    if (fc % 30 == 0) {
+        loginLog(QString("[截图] #%1 %2x%3 valid=%4").arg(fc)
+            .arg(valid ? data.des.Width : 0).arg(valid ? data.des.Height : 0).arg(valid));
+    }
 }
 
 // ════════════════════════════════════════════════
@@ -480,6 +494,11 @@ void AutoLogin::processState()
     // ── 11. 等待角色选择 → 只有一个角色, 默认已选中, 直接点进入游戏 ──
     case LoginPhase::WaitCharSelect:
     {
+        // 等1秒让界面加载稳定
+        if (m_phaseTicks <= 2) {
+            if (m_phaseTicks == 1) QThread::msleep(1000);
+            return;
+        }
         if (m_phaseTicks > 20) {
             loginLog("⚠ 角色选择界面超时，尝试直接进入");
             transitionTo(LoginPhase::EnterGame);
@@ -698,13 +717,32 @@ void AutoLogin::processState()
         break;
     }
 
-    // ── ESC打开系统设置 ──
+    // ── 点击设置图标 ──
     case LoginPhase::OpenSettings:
     {
-        pressKey(VK_ESCAPE);
-        loginLog("按ESC → 等待设置界面打开...");
-        QThread::msleep(1500);
-        transitionTo(LoginPhase::GameSettings);
+        if (m_phaseTicks > 10) {
+            loginLog("设置图标超时，跳过");
+            transitionTo(LoginPhase::PressF11);
+            return;
+        }
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) return;
+
+        QPoint pt;
+        if (matchTemplate(frame, "\u8bbe\u7f6e", &pt, 0.70, "icons")) {
+            humanClick(pt.x(), pt.y());
+            loginLog(QString("点击设置图标 → 等待界面打开... (帧#%1)").arg(m_frameCount));
+            QThread::msleep(1500);
+            // —— 调试：保存点击设置后的画面 ——
+            cv::Mat frame2 = screenToMat();
+            loginLog(QString("调试帧 帧#%1, 尺寸=%2x%3").arg(m_frameCount).arg(frame2.cols).arg(frame2.rows));
+            if (!frame2.empty()) {
+                QString debugPath = QString::fromUtf8("debug_open_settings_%1.png").arg(m_frameCount);
+                cv::imwrite(debugPath.toStdString(), frame2);
+                loginLog(QString("已保存 %1").arg(debugPath));
+            }
+            transitionTo(LoginPhase::GameSettings);
+        }
         break;
     }
 
@@ -720,14 +758,29 @@ void AutoLogin::processState()
         if (frame.empty()) return;
 
         QPoint pt;
-        if (matchTemplate(frame, "\u6e38\u620f\u8bbe\u7f6e", &pt, 0.80, "settings")) {
-            humanClick(pt.x(), pt.y());
-            QThread::msleep(800);
-            QPoint lowPt;
-            if (matchTemplate(frame, "\u6700\u4f4e\u753b\u8d28", &lowPt, 0.80, "settings")) {
-                loginLog("点击最低画质");
-                humanClick(lowPt.x(), lowPt.y());
-                QThread::msleep(300);
+        // 先用低阈值找"游戏设置"tab定位设置面板
+        if (matchTemplate(frame, "\u6e38\u620f\u8bbe\u7f6e", &pt, 0.55, "settings")) {
+            // 竖排文字模板，点文字右侧的tab按钮区域
+            humanClick(pt.x() + 40, pt.y());
+            QThread::msleep(500);
+            frame = screenToMat();
+            auto &gu = GameUtils::Instance();
+            // 从ROI配置获取设置面板（窗口相对→屏幕绝对）
+            QRect roi = gu.settingsPanelROI();
+            cv::Rect panel;
+            if (!roi.isEmpty() && m_gameHwnd) {
+                RECT wr; GetWindowRect(m_gameHwnd, &wr);
+                panel = cv::Rect(wr.left + roi.x(), wr.top + roi.y(), roi.width(), roi.height());
+            }
+            panel &= cv::Rect(0, 0, frame.cols, frame.rows);
+            if (panel.width > 0 && panel.height > 0) {
+                cv::Mat panelFrame = frame(panel);
+                auto mr = gu.bestMatch(panelFrame, gu.templateRoot() + "/settings", "\u6700\u4f4e\u753b\u8d28");
+                if (mr.confidence > 0.90) {
+                    loginLog("点击最低画质");
+                    humanClick(panel.x + mr.centerX, panel.y + mr.centerY);
+                    QThread::msleep(300);
+                }
             }
             transitionTo(LoginPhase::FeatureSettings);
             emit statusMessage(QString("[窗口%1] 功能设置...").arg(m_slot->index() + 1));
@@ -747,13 +800,22 @@ void AutoLogin::processState()
         if (frame.empty()) return;
 
         QPoint pt;
-        if (matchTemplate(frame, "\u529f\u80fd", &pt, 0.80, "settings")) {
-            humanClick(pt.x(), pt.y());
-            QThread::msleep(800);
+        if (matchTemplate(frame, "\u529f\u80fd", &pt, 0.90, "settings")) {
+            humanClick(pt.x(), pt.y(), 300);
+            QThread::msleep(5000);
             loginLog("切换至功能页，批量关闭开关...");
-
             frame = screenToMat();
-            QThread::msleep(300);
+            auto &gu = GameUtils::Instance();
+            cv::imwrite((gu.templateRoot() + "/../debug_feature_frame.png").toStdString(), frame);
+            loginLog(QString("已保存调试帧: %1x%2 (帧#%3)").arg(frame.cols).arg(frame.rows).arg(m_frameCount));
+            // 从ROI配置获取设置面板（窗口相对→屏幕绝对）
+            QRect roi = gu.settingsPanelROI();
+            cv::Rect panel;
+            if (!roi.isEmpty() && m_gameHwnd) {
+                RECT wr; GetWindowRect(m_gameHwnd, &wr);
+                panel = cv::Rect(wr.left + roi.x(), wr.top + roi.y(), roi.width(), roi.height());
+            }
+            panel &= cv::Rect(0, 0, frame.cols, frame.rows);
 
             static const QStringList toggles = {
                 "\u5173\u95ed\u4ed9\u5b50\u6307\u5357",
@@ -766,19 +828,45 @@ void AutoLogin::processState()
                 "\u81ea\u52a8\u53d1\u9001\u9519\u8bef\u6587\u4ef6"
             };
 
-            for (const QString &tpl : toggles) {
-                if (m_phase != LoginPhase::FeatureSettings) return;
-                QPoint tpt;
-                if (matchTemplate(frame, tpl, &tpt, 0.80, "settings")) {
-                    loginLog(QString("点击: %1").arg(tpl));
-                    humanClick(tpt.x(), tpt.y());
-                    QThread::msleep(200);
-                    frame = screenToMat();
-                    QThread::msleep(200);
+            if (panel.width > 0 && panel.height > 0) {
+                cv::Mat panelFrame = frame(panel);
+                cv::imwrite((gu.templateRoot() + "/../debug_feature_frame_1.png").toStdString(), panelFrame);
+                for (const QString &tpl : toggles) {
+                    if (m_phase != LoginPhase::FeatureSettings) return;
+                    auto r = gu.bestMatch(panelFrame, gu.templateRoot() + "/settings", tpl);
+                    if (r.confidence > 0.80) {
+                        loginLog(QString("点击: %1 conf=%.3f").arg(tpl).arg(r.confidence));
+                        humanClick(panel.x + r.centerX, panel.y + r.centerY);
+                        QThread::msleep(300);
+                        frame = screenToMat();
+                        QThread::msleep(300);
+                        if (panel.width > 0 && panel.height > 0)
+                            panelFrame = frame(panel);
+                    }
                 }
             }
 
-            loginLog("功能设置完成");
+            loginLog(QString("功能设置完成 (帧#%1)").arg(m_frameCount));
+            // 点击设置确定关闭弹窗
+            if (matchTemplate(frame, "\u8bbe\u7f6e\u786e\u5b9a", &pt, 0.70, "settings")) {
+                humanClick(pt.x(), pt.y(), 200);
+                loginLog("点击设置确定关闭弹窗");
+                QThread::msleep(1000);
+                // 点击返回游戏
+                frame = screenToMat();
+                if (matchTemplate(frame, "\u8fd4\u56de\u6e38\u620f", &pt, 0.70, "settings")) {
+                    humanClick(pt.x(), pt.y(), 200);
+                    loginLog("点击返回游戏");
+                }
+            } else {
+                loginLog("未找到设置确定按钮");
+            }
+            // —— 调试：保存功能页处理后的画面 ——
+            cv::Mat debugFrame = screenToMat();
+            if (!debugFrame.empty()) {
+                cv::imwrite((gu.templateRoot() + "/../debug_feature_done.png").toStdString(), debugFrame);
+                loginLog(QString("已保存 debug_feature_done.png (帧#%1)").arg(m_frameCount));
+            }
             transitionTo(LoginPhase::PressF11);
         }
         break;
@@ -787,9 +875,16 @@ void AutoLogin::processState()
     // ── F11屏蔽其他玩家 ──
     case LoginPhase::PressF11:
     {
-        pressKey(VK_F11);
-        loginLog("按F11屏蔽其他玩家");
+        pressKey(KEY_F11);
+        loginLog(QString("按F11屏蔽其他玩家 (帧#%1)").arg(m_frameCount));
         QThread::msleep(500);
+        // —— 调试：保存关闭设置后的画面 ——
+        cv::Mat frame = screenToMat();
+        loginLog(QString("F11后 帧#%1, 尺寸=%2x%3").arg(m_frameCount).arg(frame.cols).arg(frame.rows));
+        if (!frame.empty()) {
+            cv::imwrite((GameUtils::Instance().templateRoot() + "/../debug_after_f11.png").toStdString(), frame);
+            loginLog(QString("已保存 debug_after_f11.png (帧#%1)").arg(m_frameCount));
+        }
         transitionTo(LoginPhase::Done);
         break;
     }
@@ -813,6 +908,7 @@ void AutoLogin::processState()
     // ── 失败 ──
     case LoginPhase::Failed:
         m_timer->stop();
+        emit finished(false);
         break;
 
     default:
@@ -841,11 +937,11 @@ bool AutoLogin::matchTemplate(const cv::Mat &frame, const QString &tplName,
 // ════════════════════════════════════════════════
 // 动作
 // ════════════════════════════════════════════════
-void AutoLogin::humanClick(int sx, int sy)
+void AutoLogin::humanClick(int sx, int sy, int delayMs)
 {
     auto &km = MouseKeyboardManager::Instance();
     km.mouseMoveDirect(sx, sy);
-    QThread::msleep(80);
+    if (delayMs > 0) QThread::msleep(delayMs);
     km.mouseClick();
     loginLog(QString("点击 (%1,%2)").arg(sx).arg(sy));
 }

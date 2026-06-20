@@ -202,6 +202,9 @@ set_target_properties(ChunGeEr PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+# MSVC: 源文件和执行字符集均为 UTF-8（修复中文乱码）
+target_compile_options(ChunGeEr PRIVATE "/utf-8")
+
 # UAC 管理员权限
 target_link_options(ChunGeEr PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
 

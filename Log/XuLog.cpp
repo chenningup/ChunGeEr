@@ -212,7 +212,7 @@ bool XuLog::init()
             spdlog::sink_ptr sink;
             if (typearray[i] == "console")
             {
-               sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+               sink = std::make_shared<spdlog::sinks::stdout_sink_mt>();  // fwrite→管道兼容QtCreator
             }
             if (typearray[i] == "msvc")
             {

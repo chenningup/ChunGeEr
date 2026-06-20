@@ -23,10 +23,10 @@ static const QStringList kCatCN = {
     QString::fromUtf8("地点"), QString::fromUtf8("任务"),
     QString::fromUtf8("弹窗"), QString::fromUtf8("角色"),
     QString::fromUtf8("启动"), QString::fromUtf8("等级"),
-    QString::fromUtf8("设置")
+    QString::fromUtf8("设置"), QString::fromUtf8("图标")
 };
 static const QStringList kCatEN = {
-    "items", "skills", "locations", "quests", "popups", "roles", "login", "levels", "settings"
+    "items", "skills", "locations", "quests", "popups", "roles", "login", "levels", "settings", "icons"
 };
 static QString catCN2EN(const QString &cn) {
     int i = kCatCN.indexOf(cn);
@@ -135,7 +135,8 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     m_roiTypeCombo->addItems({
         QString::fromUtf8("地图名"), QString::fromUtf8("等级"),
         QString::fromUtf8("技能"), QString::fromUtf8("主线任务"),
-        QString::fromUtf8("掉线"), QString::fromUtf8("卡住")
+        QString::fromUtf8("掉线"), QString::fromUtf8("卡住"),
+        QString::fromUtf8("设置区域")
     });
     m_roiTypeCombo->setMinimumWidth(90);
     m_roiTypeCombo->setVisible(false);
@@ -202,7 +203,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     connect(m_imageLabel, &CaptureImageLabel::selectionChanged, this, [this](const QRect &sel) {
         if (!m_roiMode || !sel.isValid() || sel.width() < 3 || sel.height() < 3) return;
         // ROI类型key映射
-        static const QStringList roiKeys = {"Location", "Level", "Skills", "MainQuest", "Disconnect", "Stopped"};
+        static const QStringList roiKeys = {"Location", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel"};
         int idx = m_roiTypeCombo->currentIndex();
         if (idx < 0 || idx >= roiKeys.size()) return;
 

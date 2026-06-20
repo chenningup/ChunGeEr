@@ -537,6 +537,7 @@ void MainWindow::loginNextSlot()
     m_autoLogins.insert(m_currentLoginIdx, m_currentLogin);
 
     connect(m_currentLogin, &AutoLogin::finished, this, &MainWindow::onLoginFinished);
+    connect(m_currentLogin, &AutoLogin::postInitDone, this, &MainWindow::onPostInitDone);
     connect(m_currentLogin, &AutoLogin::captchaRequired, this, &MainWindow::onCaptchaRequired);
     connect(m_currentLogin, &AutoLogin::statusMessage, this, [this](const QString &msg) {
         ui->statuslabel->setText(msg);
@@ -564,7 +565,9 @@ void MainWindow::onLoginFinished(bool success)
             addActiveTask(idx, slot->taskName());
             if (m_statusLabels[idx]) { m_statusLabels[idx]->setText(QString::fromUtf8("\u5df2\u767b\u5f55")); m_statusLabels[idx]->setStyleSheet("color: #090;"); }
             refreshTaskPanel();
-            ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功").arg(idx + 1));
+            ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功，开始初始化...").arg(idx + 1));
+            m_currentLogin->startPostInit();
+            return;
         } else {
             slot->setState(GameSlot::Idle);
             removeActiveTask(idx);
@@ -575,6 +578,14 @@ void MainWindow::onLoginFinished(bool success)
     }
 
     // 继续登录下一个
+    m_currentLogin = nullptr;
+    m_currentLoginIdx = -1;
+    loginNextSlot();
+}
+
+void MainWindow::onPostInitDone(int slotIndex)
+{
+    ui->textEdit->append(QString::fromUtf8("窗口%1 初始化完成，继续下一个").arg(slotIndex + 1));
     m_currentLogin = nullptr;
     m_currentLoginIdx = -1;
     loginNextSlot();

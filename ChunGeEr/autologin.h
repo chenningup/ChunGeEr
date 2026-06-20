@@ -31,6 +31,11 @@ enum class LoginPhase {
     CharCreate,         // 创建新角色 → 选门派/输名字/确认
     EnterGame,          // 点击进入游戏
     VerifyInGame,       // 验证已进入游戏
+    ClosePopups,        // 关闭初始弹窗（跳过/活动）
+    OpenSettings,       // ESC打开系统设置
+    GameSettings,       // 点击游戏设置，找最低画质
+    FeatureSettings,    // 点击功能，批量关闭开关
+    PressF11,           // 按F11屏蔽其他玩家
     Done,
     Failed
 };
@@ -45,12 +50,14 @@ public:
     QString phaseName(LoginPhase p) const;
 
     void start(const QString &gamePath);
+    void startPostInit();
     void cancel();
 
 signals:
     void statusMessage(const QString &msg);
     void finished(bool success);
     void captchaRequired(int slotIndex);   // 需要人工输入验证码
+    void postInitDone(int slotIndex);
 
 public slots:
     void onCaptchaDone();                   // 用户点击"验证码已填"后调用
@@ -84,6 +91,7 @@ private:
     int        m_phaseTicks = 0;
     int        m_charCreateStep = 0; // CharCreate 子阶段
     bool       m_captchaPending = false;  // 等待验证码
+    bool       m_isPostInit = false;      // 是否在初始化阶段
     HWND       m_launcherHwnd = nullptr;
     HWND       m_gameHwnd = nullptr;
 

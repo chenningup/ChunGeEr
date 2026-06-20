@@ -1,4 +1,4 @@
-﻿#include "autologin.h"
+#include "autologin.h"
 #include "gameutils.h"
 #include "gameslot.h"
 #include "LeoControl/mousekeyboardmanager.h"
@@ -29,7 +29,7 @@ QString AutoLogin::phaseText() const
         "WaitLoading",
         "DetectLogin","TypeAccount","TypePassword","ClickLoginBtn",
         "WaitServerSelect","ConfirmServer","WaitCharSelect","CharSelect","CharCreate","EnterGame",
-        "VerifyInGame","Done","Failed"
+        "VerifyInGame","ClosePopups","OpenSettings","GameSettings","FeatureSettings","PressF11","Done","Failed"
     };
     int idx = (int)m_phase;
     if (idx < 0 || idx >= (int)(sizeof(texts) / sizeof(texts[0])))
@@ -52,14 +52,24 @@ void AutoLogin::start(const QString &gamePath)
     m_timer->start();
 }
 
+void AutoLogin::startPostInit()
+{
+    m_isPostInit = true;
+    m_charCreateStep = 0;
+    m_phaseTicks = 0;
+    m_phase = LoginPhase::ClosePopups;
+    loginLog("========== 开始初始化 ==========");
+    m_timer->start();
+}
+
 void AutoLogin::cancel()
 {
     m_timer->stop();
     if (m_process && m_process->state() != QProcess::NotRunning) {
         m_process->kill();
-        m_process->waitForFinished(2000);
+        m_process->waitForFinished(500);
     }
-    transitionTo(LoginPhase::Failed);
+    m_phase = LoginPhase::Failed;
     emit finished(false);
 }
 
@@ -247,7 +257,6 @@ void AutoLogin::processState()
             transitionTo(LoginPhase::Done);
             emit statusMessage(QString("[窗口%1] 已在游戏中！")
                 .arg(m_slot->index() + 1));
-            emit finished(true);
             return;
         }
 
@@ -484,7 +493,6 @@ void AutoLogin::processState()
         if (matchTemplate(frame, "\u8fdb\u5165\u6e38\u620f", &enterPt, 0.80)) {
             loginLog(QString("点击进入游戏 (%1,%2)").arg(enterPt.x()).arg(enterPt.y()));
             humanClick(enterPt.x(), enterPt.y());
-            QThread::msleep(3000);
             transitionTo(LoginPhase::VerifyInGame);
             emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
             break;
@@ -605,7 +613,6 @@ void AutoLogin::processState()
         } else {
             pressKey(KEY_RETURN);
         }
-        QThread::msleep(3000);
 
         transitionTo(LoginPhase::VerifyInGame);
         emit statusMessage(QString("[窗口%1] 进入游戏...").arg(m_slot->index() + 1));
@@ -631,15 +638,182 @@ void AutoLogin::processState()
 
         if (hasLocation) {
             m_slot->setLoggedIn(true);
-            loginLog(QString("✅ 登录成功！ location=%1")
+            loginLog(QString("✅ 登录成功！ location=%1 → Done")
                 .arg(locMatch.name.toStdString()));
             transitionTo(LoginPhase::Done);
-            emit statusMessage(QString("[窗口%1] 登录成功！")
+            emit statusMessage(QString("[窗口%1] 登录完成")
                 .arg(m_slot->index() + 1));
-            emit finished(true);
             return;
         }
+        break;
     }
+
+    // ── 关闭初始弹窗 ──
+    case LoginPhase::ClosePopups:
+    {
+        if (m_phaseTicks > 30) {
+            loginLog("弹窗已处理（超时）");
+            transitionTo(LoginPhase::OpenSettings);
+            return;
+        }
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) return;
+
+        auto &gu = GameUtils::Instance();
+        QString dir = gu.templateRoot() + "/popups";
+
+        if (m_charCreateStep == 0) {
+            auto r1 = gu.bestMatch(frame, dir, "\u8df3\u8fc7\u6e38\u620f\u521d\u59cb\u9636\u6bb5");
+            loginLog(QString("跳过游戏初始阶段 conf=%1 at=(%2,%3)")
+                .arg(r1.confidence, 0, 'f', 3).arg(r1.centerX).arg(r1.centerY));
+            if (r1.confidence > 0.80) {
+                loginLog("→ 点取消");
+                auto r2 = gu.bestMatch(frame, dir, "\u8df3\u8fc7\u5f39\u7a97\u53d6\u6d88");
+                if (r2.confidence > 0.80)
+                    humanClick(r2.centerX, r2.centerY);
+                else
+                    humanClick(r1.centerX + 200, r1.centerY + 150);
+                QThread::msleep(1000);
+                m_charCreateStep = 1;
+                m_phaseTicks = 0;
+                return;
+            }
+            // 没匹配到 → 弹窗不存在，直接下一步
+            m_charCreateStep = 1;
+            return;
+        }
+
+        if (m_charCreateStep == 1) {
+            auto r3 = gu.bestMatch(frame, dir, "\u5c55\u5f00\u7684\u6d3b\u52a8");
+            loginLog(QString("展开的活动 conf=%1 at=(%2,%3)")
+                .arg(r3.confidence, 0, 'f', 3).arg(r3.centerX).arg(r3.centerY));
+            if (r3.confidence > 0.80) {
+                loginLog("→ 关闭");
+                humanClick(r3.centerX, r3.centerY);
+                QThread::msleep(1000);
+            }
+            loginLog("弹窗处理完毕");
+            transitionTo(LoginPhase::OpenSettings);
+        }
+        break;
+    }
+
+    // ── ESC打开系统设置 ──
+    case LoginPhase::OpenSettings:
+    {
+        pressKey(VK_ESCAPE);
+        loginLog("按ESC → 等待设置界面打开...");
+        QThread::msleep(1500);
+        transitionTo(LoginPhase::GameSettings);
+        break;
+    }
+
+    // ── 点游戏设置 → 最低画质 ──
+    case LoginPhase::GameSettings:
+    {
+        if (m_phaseTicks > 20) {
+            loginLog("游戏设置超时，跳过");
+            transitionTo(LoginPhase::FeatureSettings);
+            return;
+        }
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) return;
+
+        QPoint pt;
+        if (matchTemplate(frame, "\u6e38\u620f\u8bbe\u7f6e", &pt, 0.80, "settings")) {
+            humanClick(pt.x(), pt.y());
+            QThread::msleep(800);
+            QPoint lowPt;
+            if (matchTemplate(frame, "\u6700\u4f4e\u753b\u8d28", &lowPt, 0.80, "settings")) {
+                loginLog("点击最低画质");
+                humanClick(lowPt.x(), lowPt.y());
+                QThread::msleep(300);
+            }
+            transitionTo(LoginPhase::FeatureSettings);
+            emit statusMessage(QString("[窗口%1] 功能设置...").arg(m_slot->index() + 1));
+        }
+        break;
+    }
+
+    // ── 点击功能 → 批量开关 ──
+    case LoginPhase::FeatureSettings:
+    {
+        if (m_phaseTicks > 20) {
+            loginLog("功能设置超时，跳过");
+            transitionTo(LoginPhase::PressF11);
+            return;
+        }
+        cv::Mat frame = screenToMat();
+        if (frame.empty()) return;
+
+        QPoint pt;
+        if (matchTemplate(frame, "\u529f\u80fd", &pt, 0.80, "settings")) {
+            humanClick(pt.x(), pt.y());
+            QThread::msleep(800);
+            loginLog("切换至功能页，批量关闭开关...");
+
+            frame = screenToMat();
+            QThread::msleep(300);
+
+            static const QStringList toggles = {
+                "\u5173\u95ed\u4ed9\u5b50\u6307\u5357",
+                "\u5173\u95ed\u65b0\u624b\u5e2e\u52a9",
+                "\u5173\u95ed\u804a\u5929\u6ce1\u6ce1",
+                "\u53d6\u6d88\u4efb\u52a1\u680f\u95ea\u70c1",
+                "\u6218\u573a\u81ea\u52a8\u7ec4\u961f",
+                "\u62d2\u7edd\u5207\u78cb",
+                "\u9690\u85cf\u5934\u76d4",
+                "\u81ea\u52a8\u53d1\u9001\u9519\u8bef\u6587\u4ef6"
+            };
+
+            for (const QString &tpl : toggles) {
+                if (m_phase != LoginPhase::FeatureSettings) return;
+                QPoint tpt;
+                if (matchTemplate(frame, tpl, &tpt, 0.80, "settings")) {
+                    loginLog(QString("点击: %1").arg(tpl));
+                    humanClick(tpt.x(), tpt.y());
+                    QThread::msleep(200);
+                    frame = screenToMat();
+                    QThread::msleep(200);
+                }
+            }
+
+            loginLog("功能设置完成");
+            transitionTo(LoginPhase::PressF11);
+        }
+        break;
+    }
+
+    // ── F11屏蔽其他玩家 ──
+    case LoginPhase::PressF11:
+    {
+        pressKey(VK_F11);
+        loginLog("按F11屏蔽其他玩家");
+        QThread::msleep(500);
+        transitionTo(LoginPhase::Done);
+        break;
+    }
+
+    // ── 登录/初始化完成 ──
+    case LoginPhase::Done:
+    {
+        if (m_isPostInit) {
+            loginLog("========== 初始化完成 ==========");
+            m_isPostInit = false;
+            m_timer->stop();
+            emit postInitDone(m_slot->index());
+        } else {
+            loginLog("登录完成");
+            m_timer->stop();
+            emit finished(true);
+        }
+        break;
+    }
+
+    // ── 失败 ──
+    case LoginPhase::Failed:
+        m_timer->stop();
+        break;
 
     default:
         break;
@@ -709,10 +883,8 @@ void AutoLogin::transitionTo(LoginPhase next)
         m_phase = next;
         m_phaseTicks = 0;
         m_retryCount = 0;
+        if (next == LoginPhase::ClosePopups) m_charCreateStep = 0;  // 复用子步骤计数
         loginLog(QString("[%1 → %2]").arg(phaseName(old)).arg(phaseName(next)));
-        if (next == LoginPhase::Done || next == LoginPhase::Failed) {
-            m_timer->stop();
-        }
     }
 }
 
@@ -723,7 +895,7 @@ QString AutoLogin::phaseName(LoginPhase p) const
         "WaitLoading",
         "DetectLogin","TypeAccount","TypePassword","ClickLoginBtn",
         "WaitServerSelect","ConfirmServer","WaitCharSelect","CharSelect","CharCreate","EnterGame",
-        "VerifyInGame","Done","Failed"
+        "VerifyInGame","ClosePopups","OpenSettings","GameSettings","FeatureSettings","PressF11","Done","Failed"
     };
     int idx = (int)p;
     if (idx < 0 || idx >= (int)(sizeof(texts) / sizeof(texts[0])))

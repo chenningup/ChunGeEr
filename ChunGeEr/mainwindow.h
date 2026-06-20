@@ -86,6 +86,7 @@ private:
     void beginLoginSequence();          // 开始依次登录
     void loginNextSlot();               // 登录下一个窗口
     void onLoginFinished(bool success);  // 单个窗口登录完成回调
+    void onPostInitDone(int slotIndex);  // 初始化完成后继续登录队列
     void onAllLoginDone();              // 所有窗口登录完成，启动任务调度
     void onCaptchaRequired(int slotIndex); // 需要人工输入验证码
 

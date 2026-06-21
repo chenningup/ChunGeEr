@@ -720,29 +720,11 @@ void AutoLogin::processState()
     // ── 点击设置图标 ──
     case LoginPhase::OpenSettings:
     {
-        if (m_phaseTicks > 10) {
-            loginLog("设置图标超时，跳过");
-            transitionTo(LoginPhase::PressF11);
-            return;
-        }
-        cv::Mat frame = screenToMat();
-        if (frame.empty()) return;
-
-        QPoint pt;
-        if (matchTemplate(frame, "\u8bbe\u7f6e", &pt, 0.70, "icons")) {
-            humanClick(pt.x(), pt.y());
-            loginLog(QString("点击设置图标 → 等待界面打开... (帧#%1)").arg(m_frameCount));
-            QThread::msleep(1500);
-            // —— 调试：保存点击设置后的画面 ——
-            cv::Mat frame2 = screenToMat();
-            loginLog(QString("调试帧 帧#%1, 尺寸=%2x%3").arg(m_frameCount).arg(frame2.cols).arg(frame2.rows));
-            if (!frame2.empty()) {
-                QString debugPath = QString::fromUtf8("debug_open_settings_%1.png").arg(m_frameCount);
-                cv::imwrite(debugPath.toStdString(), frame2);
-                loginLog(QString("已保存 %1").arg(debugPath));
-            }
-            transitionTo(LoginPhase::GameSettings);
-        }
+        // ESC 打开系统菜单，再 ESC 关闭（某些游戏ESC打开的就是设置面板）
+        pressKey(KEY_ESC);
+        loginLog("按ESC打开系统菜单...");
+        QThread::msleep(1500);
+        transitionTo(LoginPhase::GameSettings);
         break;
     }
 

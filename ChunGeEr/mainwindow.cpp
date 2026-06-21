@@ -921,7 +921,9 @@ void MainWindow::refreshTaskPanel()
     }
 
     if (!anyLoggedIn) {
-        m_taskPanel->hide();
+        m_modeStack->setCurrentIndex(0);
+        m_accountModeBtn->setChecked(true);
+        m_taskModeBtn->setChecked(false);
         return;
     }
 
@@ -966,7 +968,9 @@ void MainWindow::refreshTaskPanel()
         m_taskRowsLayout->addWidget(row);
     }
 
-    m_taskPanel->show();
+    m_modeStack->setCurrentIndex(1);
+    m_taskModeBtn->setChecked(true);
+    m_accountModeBtn->setChecked(false);
 }
 
 // =============================================

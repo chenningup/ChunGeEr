@@ -158,6 +158,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     topLayout->addWidget(m_nameEdit);
     topLayout->addWidget(m_roiTypeCombo);
     topLayout->addWidget(m_roiBtn);
+
     topLayout->addWidget(m_dirBtn);
     topLayout->addStretch();
 
@@ -525,8 +526,8 @@ void GameItemCaptureWidget::onTestMatch()
             continue;
         }
 
-        cv::Mat result;
-        cv::matchTemplate(frame, templ, result, cv::TM_CCOEFF_NORMED);
+        cv::Mat result, searchMat = frame, tplMat = templ;
+        cv::matchTemplate(searchMat, tplMat, result, cv::TM_CCOEFF_NORMED);
 
         double maxVal;
         cv::Point maxLoc;

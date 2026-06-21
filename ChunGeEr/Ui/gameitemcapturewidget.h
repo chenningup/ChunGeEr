@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QHash>
 #include <opencv2/opencv.hpp>
 #include <windows.h>

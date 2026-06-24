@@ -11,7 +11,7 @@
 #include <opencv2/imgproc.hpp>
 
 AutoLogin::AutoLogin(GameSlot *slot, QObject *parent)
-    : QObject(parent), m_slot(slot)
+    : QObject(parent), m_slot(slot), m_waitingForUpdate(false)
 {
     m_timer = new QTimer(this);
     m_timer->setInterval(m_loopIntervalMs);
@@ -195,6 +195,7 @@ void AutoLogin::processState()
         }
 
         QPoint center;
+        // 优先检测"开始游戏"
         if (matchTemplate(frame, "\u5f00\u59cb\u6e38\u620f", &center, 0.80)) {
             loginLog(QString("✅ 检测到开始游戏按钮 (%1,%2)")
                 .arg(center.x()).arg(center.y()));
@@ -207,8 +208,21 @@ void AutoLogin::processState()
             return;
         }
 
+        // 没"开始游戏"→尝试"更新游戏"（有更新时按钮会变）
+        if (matchTemplate(frame, "\u66f4\u65b0\u6e38\u620f", &center, 0.80)) {
+            loginLog(QString("🔄 检测到更新游戏按钮 (%1,%2)")
+                .arg(center.x()).arg(center.y()));
+            humanClick(center.x(), center.y());
+            m_waitingForUpdate = true;  // 更新完会自动进游戏
+            transitionTo(LoginPhase::WaitGameWindow);
+            emit statusMessage(QString("[窗口%1] 点击更新游戏，等待更新完成&自动登录...")
+                .arg(m_slot->index() + 1));
+            m_retryCount = 0;
+            return;
+        }
+
         if (++m_retryCount > MAX_RETRIES) {
-            loginLog("❌ 开始游戏按钮检测失败");
+            loginLog("❌ 开始游戏/更新游戏按钮检测失败");
             cancel();
         }
         break;
@@ -238,6 +252,7 @@ void AutoLogin::processState()
             QThread::msleep(500);
             QThread::msleep(500);
 
+            m_waitingForUpdate = false;  // 重置
             loginLog(QString("✅ 游戏窗口已找到 hwnd=%1 pos=(-4,3) size=1048x837")
                 .arg((uintptr_t)hwnd, 0, 16));
             transitionTo(LoginPhase::WaitLoading);
@@ -247,8 +262,10 @@ void AutoLogin::processState()
             return;
         }
 
-        if (m_phaseTicks > LAUNCHER_TIMEOUT) {
-            loginLog("❌ 等待游戏窗口超时");
+        // 更新等待超时更长 (300 ticks = ~240s)
+        int timeoutTicks = m_waitingForUpdate ? 300 : LAUNCHER_TIMEOUT;
+        if (m_phaseTicks > timeoutTicks) {
+            loginLog(QString("❌ 等待游戏窗口超时 (%1 ticks)").arg(timeoutTicks));
             cancel();
         }
         break;

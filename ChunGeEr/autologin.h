@@ -95,6 +95,7 @@ private:
     int        m_charCreateStep = 0; // CharCreate 子阶段
     bool       m_captchaPending = false;  // 等待验证码
     bool       m_isPostInit = false;      // 是否在初始化阶段
+    bool       m_waitingForUpdate = false; // 点击更新后等待游戏窗口（超时更长）
     HWND       m_launcherHwnd = nullptr;
     HWND       m_gameHwnd = nullptr;
 

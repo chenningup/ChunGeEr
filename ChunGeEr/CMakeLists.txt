@@ -97,6 +97,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Ui/screensharewidget.h Ui/screensharewidget.cpp Ui/screensharewidget.ui
         Ui/gameitemcapturewidget.h Ui/gameitemcapturewidget.cpp
         gameutils.h gameutils.cpp
+        bitmapfontlib.h bitmapfontlib.cpp
         gameslot.h gameslot.cpp
         slotscheduler.h slotscheduler.cpp
         autologin.h autologin.cpp
@@ -225,4 +226,10 @@ add_custom_command(TARGET ChunGeEr POST_BUILD
         "${CMAKE_SOURCE_DIR}/../images"
         "$<TARGET_FILE_DIR:ChunGeEr>/images"
     COMMENT "Copying images directory to output..."
+)
+
+# Post-build: 复制 *.bfl 字库到输出目录
+add_custom_command(TARGET ChunGeEr POST_BUILD
+    COMMAND cmd /c "if exist \"${CMAKE_SOURCE_DIR}\\..\\*.bfl\" copy /Y \"${CMAKE_SOURCE_DIR}\\..\\*.bfl\" \"$<TARGET_FILE_DIR:ChunGeEr>\\\" >nul 2>&1"
+    COMMENT "Copying BFL font libs to output..."
 )

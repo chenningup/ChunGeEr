@@ -5,15 +5,25 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QDialog>
 #include <QDebug>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QScrollArea>
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsRectItem>
+#include <QWheelEvent>
+#include <QSet>
 #include <QMenu>
 #include <QSettings>
 #include <QCoreApplication>
+#include <functional>
 #include "../Ocr/ocrmnager.h"
+#include "../bitmapfontlib.h"
+#include "XuLog.h"
 
 // ════════════════════════════════════════════════
 // 分类中英文映射
@@ -111,9 +121,17 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     , m_saveDir("D:/coding/8_mProject/10_ChungGeEr/ChunGeEr/images")
     , m_lastCategoryIdx(0)
     , m_loadingList(false)
+    , m_bflTrainingMode(false)
+    , m_bflTestMode(false)
+    , m_bflColorPickMode(false)
+    , m_bflColorBtn(nullptr)
+    , m_bflColorLabel(nullptr)
 {
     setWindowTitle(QString::fromUtf8("游戏物品截取"));
     resize(1100, 700);
+
+    // 默认颜色过滤器：白字，偏色0x30
+    BitmapFontLib::Instance().setColorFilter(BflColorFilter());
 
     // ════════════════════════════════════════
     // 顶部工具栏
@@ -129,6 +147,10 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     m_screenshotBtn = new QPushButton(QString::fromUtf8("📷 截图"), this);
     m_testBtn = new QPushButton(QString::fromUtf8("🔍 测试匹配"), this);
     m_ocrBtn = new QPushButton(QString::fromUtf8("📝 OCR识别"), this);
+    m_trainBflBtn = new QPushButton(QString::fromUtf8("🔤 字库训练"), this);
+    m_testBflBtn = new QPushButton(QString::fromUtf8("🔍 字库测试"), this);
+    m_loadBflBtn = new QPushButton(QString::fromUtf8("📂 加载字库"), this);
+    m_saveBflBtn = new QPushButton(QString::fromUtf8("💾 保存字库"), this);
     m_dirBtn = new QPushButton(QString::fromUtf8("📁 选择目录"), this);
 
     m_roiTypeCombo = new QComboBox(this);
@@ -160,7 +182,52 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     topLayout->addWidget(m_roiBtn);
 
     topLayout->addWidget(m_dirBtn);
+
     topLayout->addStretch();
+
+    // 第二行：点阵字库
+    auto *bflLayout = new QHBoxLayout();
+
+    m_bflStatusLabel = new QLabel(QString::fromUtf8("字库: 未加载"), this);
+    m_bflStatusLabel->setStyleSheet("color: #888; padding: 0 6px;");
+    bflLayout->addWidget(m_bflStatusLabel);
+    bflLayout->addWidget(m_loadBflBtn);
+    bflLayout->addWidget(m_saveBflBtn);
+    bflLayout->addWidget(m_trainBflBtn);
+    bflLayout->addWidget(m_testBflBtn);
+
+    // 颜色过滤器
+    m_bflColorLabel = new QLabel(QString::fromUtf8("未取色"), this);
+    m_bflColorLabel->setStyleSheet("background: #EEE; color: #888; border: 1px solid #999; padding: 0 8px; border-radius: 3px;");
+    m_bflColorLabel->setToolTip(QString::fromUtf8("点击🎨取色后在此显示，右键重置"));
+    m_bflColorLabel->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_bflColorLabel, &QLabel::customContextMenuRequested, this, [this]() {
+        auto &lib = BitmapFontLib::Instance();
+        if (lib.colorFilter().isEmpty()) return;
+        QMenu menu;
+        QAction *clearAction = menu.addAction(QString::fromUtf8("🗑 重置取色"));
+        QAction *chosen = menu.exec(QCursor::pos());
+        if (chosen == clearAction) {
+            BflColorFilter filter;
+            lib.setColorFilter(filter);
+            m_bflColorLabel->setText(QString::fromUtf8("未取色"));
+            m_bflColorLabel->setStyleSheet("background: #EEE; color: #888; border: 1px solid #999; padding: 0 8px; border-radius: 3px;");
+            m_bflColorLabel->setToolTip(QString::fromUtf8("点击🎨取色后在此显示，右键重置"));
+            infof("[BFL] 取色已重置");
+        }
+    });
+    bflLayout->addWidget(m_bflColorLabel);
+
+    m_bflColorBtn = new QPushButton(QString::fromUtf8("🎨 取色"), this);
+    m_bflColorBtn->setToolTip(QString::fromUtf8("点击后在截图上点选文字颜色"));
+    m_bflColorBtn->setFixedWidth(80);
+    bflLayout->addWidget(m_bflColorBtn);
+
+    m_trainBflBtn->setEnabled(false);
+    m_testBflBtn->setEnabled(false);
+    m_bflColorBtn->setEnabled(false);
+
+    bflLayout->addStretch();
 
     // ════════════════════════════════════════
     // 中间区域：左侧分类树 + 右侧游戏画面
@@ -191,6 +258,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
 
     auto *rootLayout = new QVBoxLayout(this);
     rootLayout->addLayout(topLayout);
+    rootLayout->addLayout(bflLayout);
     rootLayout->addLayout(midLayout, 1);
 
     // ── 信号连接 ──
@@ -200,15 +268,58 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     connect(m_ocrBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onOcrRecognize);
     connect(m_dirBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onSelectSaveDir);
     connect(m_roiBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onRoiModeToggle);
-    // ROI模式框选 → 直接保存
+    connect(m_loadBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibLoad);
+    connect(m_saveBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibSave);
+    connect(m_trainBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibTrain);
+    connect(m_testBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibTest);
+    connect(m_bflColorBtn, &QPushButton::clicked, this, [this]() {
+        infof("进入取色模式: 请在截图上点击文字颜色");
+        if (!m_paused) {
+            m_paused = true;
+            m_captureTimer->stop();
+            m_pauseBtn->setText(QString::fromUtf8("▶ 继续"));
+        }
+        m_bflColorPickMode = true;
+        m_imageLabel->setCursor(Qt::CrossCursor);
+    });
+    // 自动加载默认字库
+    {
+        QString defaultBfl = QDir::cleanPath(m_saveDir + QString::fromUtf8("/../datang_font.bfl"));
+        if (QFileInfo::exists(defaultBfl) && BitmapFontLib::Instance().load(defaultBfl)) {
+            m_bflPath = defaultBfl;
+            updateBflStatus();
+        }
+    }
+    // 统一框选：字库训练/测试优先于ROI
     connect(m_imageLabel, &CaptureImageLabel::selectionChanged, this, [this](const QRect &sel) {
-        if (!m_roiMode || !sel.isValid() || sel.width() < 3 || sel.height() < 3) return;
-        // ROI类型key映射
+        // 取色模式优先（单点点击，rect可能很小）
+        if (m_bflColorPickMode) {
+            m_bflColorPickMode = false;
+            m_imageLabel->setCursor(Qt::ArrowCursor);
+            if (sel.isValid()) {
+                handleBflColorPick(sel);
+            }
+            return;
+        }
+
+        if (!sel.isValid() || sel.width() < 3 || sel.height() < 3) return;
+
+        if (m_bflTrainingMode) {
+            m_bflTrainingMode = false;
+            handleBflTrainSelection(sel);
+            return;
+        }
+        if (m_bflTestMode) {
+            m_bflTestMode = false;
+            handleBflTestSelection(sel);
+            return;
+        }
+
+        if (!m_roiMode) return;
         static const QStringList roiKeys = {"Location", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel"};
         int idx = m_roiTypeCombo->currentIndex();
         if (idx < 0 || idx >= roiKeys.size()) return;
 
-        // 框选区域是pixmap坐标，转换到原始帧坐标
         QSize pixSize = m_currentPixmap.size();
         double sx = (double)m_currentFrame.cols / pixSize.width();
         double sy = (double)m_currentFrame.rows / pixSize.height();
@@ -340,6 +451,12 @@ QImage GameItemCaptureWidget::matToQImage(const cv::Mat &mat)
     if (mat.type() == CV_8UC4) {
         return QImage(mat.data, mat.cols, mat.rows, (int)mat.step, QImage::Format_ARGB32).copy();
     }
+    if (mat.type() == CV_8UC1) {
+        // 单通道灰度图 → 转 BGR 再转 QImage，保证二值化预览可见
+        cv::Mat bgr;
+        cv::cvtColor(mat, bgr, cv::COLOR_GRAY2BGR);
+        return QImage(bgr.data, bgr.cols, bgr.rows, (int)bgr.step, QImage::Format_BGR888).copy();
+    }
     return QImage();
 }
 
@@ -410,11 +527,15 @@ void GameItemCaptureWidget::onPauseToggle()
         m_pauseBtn->setText(QString::fromUtf8("▶ 继续"));
         m_screenshotBtn->setEnabled(true);
         m_ocrBtn->setEnabled(true);
+        m_trainBflBtn->setEnabled(true);
+        m_testBflBtn->setEnabled(BitmapFontLib::Instance().charCount() > 0);
         m_imageLabel->setCursor(Qt::CrossCursor);
     } else {
         m_pauseBtn->setText(QString::fromUtf8("⏸ 暂停"));
         m_screenshotBtn->setEnabled(false);
         m_ocrBtn->setEnabled(false);
+        m_trainBflBtn->setEnabled(false);
+        m_testBflBtn->setEnabled(false);
         m_imageLabel->clearSelection();
         m_imageLabel->setCursor(Qt::ArrowCursor);
     }
@@ -526,8 +647,8 @@ void GameItemCaptureWidget::onTestMatch()
             continue;
         }
 
-        cv::Mat result, searchMat = frame, tplMat = templ;
-        cv::matchTemplate(searchMat, tplMat, result, cv::TM_CCOEFF_NORMED);
+        cv::Mat result;
+        cv::matchTemplate(frame, templ, result, cv::TM_CCOEFF_NORMED);
 
         double maxVal;
         cv::Point maxLoc;
@@ -785,4 +906,683 @@ void GameItemCaptureWidget::saveRoi(const QString &roiKey, const QRect &rect)
         QString::fromUtf8("%1: (%2,%3) %4x%5")
             .arg(roiKey).arg(rect.x()).arg(rect.y())
             .arg(rect.width()).arg(rect.height()));
+}
+
+// ════════════════════════════════════════════════
+// 点阵字库 - 刷新状态标签
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::updateBflStatus()
+{
+    auto &lib = BitmapFontLib::Instance();
+    QString fname = m_bflPath.isEmpty()
+        ? QString::fromUtf8("未加载") : QFileInfo(m_bflPath).fileName();
+    m_bflStatusLabel->setText(
+        QString::fromUtf8("字库: %1 | %2\u5b57").arg(fname).arg(lib.charCount()));
+    m_bflStatusLabel->setStyleSheet(
+        lib.charCount() > 0 ? "color: #5f5; padding: 0 6px;" : "color: #888; padding: 0 6px;");
+    bool ready = lib.charCount() > 0;
+    m_trainBflBtn->setEnabled(true);
+    m_testBflBtn->setEnabled(ready);
+    if (m_bflColorBtn) m_bflColorBtn->setEnabled(true);
+}
+
+// ════════════════════════════════════════════════
+// 加载字库
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::onFontLibLoad()
+{
+    QString path = QFileDialog::getOpenFileName(this,
+        QString::fromUtf8("\u52a0\u8f7d\u5b57\u5e93"),
+        m_saveDir, QString::fromUtf8("BitmapFontLib (*.bfl)"));
+    if (path.isEmpty()) return;
+
+    auto &lib = BitmapFontLib::Instance();
+    if (lib.load(path)) {
+        m_bflPath = path;
+        updateBflStatus();
+        QMessageBox::information(this, QString::fromUtf8("\u52a0\u8f7d\u6210\u529f"),
+            QString::fromUtf8("\u5df2\u52a0\u8f7d %1 \u4e2a\u5b57\u7b26")
+                .arg(lib.charCount()));
+    } else {
+        QMessageBox::warning(this, QString::fromUtf8("\u52a0\u8f7d\u5931\u8d25"),
+            QString::fromUtf8("\u65e0\u6cd5\u8bfb\u53d6\u5b57\u5e93\u6587\u4ef6\uff01"));
+    }
+}
+
+// ════════════════════════════════════════════════
+// 保存字库
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::onFontLibSave()
+{
+    auto &lib = BitmapFontLib::Instance();
+    if (lib.charCount() == 0) {
+        QMessageBox::warning(this, QString::fromUtf8("\u63d0\u793a"),
+            QString::fromUtf8("\u5b57\u5e93\u4e3a\u7a7a\uff0c\u8bf7\u5148\u8bad\u7ec3\uff01"));
+        return;
+    }
+    QString defaultName = m_bflPath.isEmpty()
+        ? QDir::cleanPath(m_saveDir + QString::fromUtf8("/../datang_font.bfl")) : m_bflPath;
+    QString path = QFileDialog::getSaveFileName(this,
+        QString::fromUtf8("\u4fdd\u5b58\u5b57\u5e93"),
+        defaultName, QString::fromUtf8("BitmapFontLib (*.bfl)"));
+    if (path.isEmpty()) return;
+
+    if (lib.save(path)) {
+        m_bflPath = path;
+        updateBflStatus();
+    }
+}
+
+// ════════════════════════════════════════════════
+// 进入训练模式
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::onFontLibTrain()
+{
+    if (BitmapFontLib::Instance().charCount() == 0) {
+        QMessageBox::information(this, QString::fromUtf8("\u63d0\u793a"),
+            QString::fromUtf8("\u5b57\u5e93\u4e3a\u7a7a\uff0c\u7b2c\u4e00\u6b21\u8bad\u7ec3\u4f1a\u81ea\u52a8\u5efa\u5e93"));
+    }
+    if (!m_paused) onPauseToggle();
+    m_bflTrainingMode = true;
+    m_imageLabel->setCursor(Qt::CrossCursor);
+    QMessageBox::information(this, QString::fromUtf8("\u5b57\u5e93\u8bad\u7ec3"),
+        QString::fromUtf8("\u8bf7\u5728\u753b\u9762\u4e0a\u6846\u9009\u4e00\u884c\u6587\u5b57\u533a\u57df\n"
+                          "\u6846\u9009\u540e\u4f1a\u81ea\u52a8\u5207\u5b57\uff0c\u7136\u540e\u8f93\u5165\u5bf9\u5e94\u6587\u5b57\u5373\u53ef\u8bad\u7ec3"));
+}
+
+// ════════════════════════════════════════════════
+// 进入测试模式
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::onFontLibTest()
+{
+    if (!m_paused) onPauseToggle();
+    m_bflTestMode = true;
+    m_imageLabel->setCursor(Qt::CrossCursor);
+    QMessageBox::information(this, QString::fromUtf8("\u5b57\u5e93\u6d4b\u8bd5"),
+        QString::fromUtf8("\u8bf7\u5728\u753b\u9762\u4e0a\u6846\u9009\u4e00\u884c\u6587\u5b57\u533a\u57df\n"
+                          "\u6846\u9009\u540e\u5c06\u81ea\u52a8\u8bc6\u522b\u5e76\u663e\u793a\u7ed3\u679c"));
+}
+
+// ════════════════════════════════════════════════
+// 训练：框选 → binarize → 切字 → 标注 → addSample
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
+{
+    if (m_currentFrame.empty()) return;
+
+    // pixmap → frame 坐标
+    QSize pixSize = m_currentPixmap.size();
+    double fsx = (double)m_currentFrame.cols / pixSize.width();
+    double fsy = (double)m_currentFrame.rows / pixSize.height();
+    int frx = qBound(0, (int)(sel.x() * fsx), m_currentFrame.cols - 1);
+    int fry = qBound(0, (int)(sel.y() * fsy), m_currentFrame.rows - 1);
+    int frw = qBound(1, (int)(sel.width() * fsx), m_currentFrame.cols - frx);
+    int frh = qBound(1, (int)(sel.height() * fsy), m_currentFrame.rows - fry);
+
+    cv::Mat roi = m_currentFrame(cv::Rect(frx, fry, frw, frh)).clone();
+    infof("[BFL] train sel: pixSize={}x{} scale=({:.3f},{:.3f}) roi=({},{},{},{})",
+        pixSize.width(), pixSize.height(), fsx, fsy, frx, fry, frw, frh);
+
+    // ═══ 步骤1: 交互取色（可缩放+像素蒙层+颜色列表） ═══
+    QDialog colorDlg(this);
+    colorDlg.setWindowTitle(QString::fromUtf8("取色 - 滚轮缩放 / 点击像素取色"));
+    colorDlg.resize(960, 580);
+    colorDlg.setMinimumSize(800, 450);
+
+    auto *outerLayout = new QVBoxLayout(&colorDlg);
+    outerLayout->setContentsMargins(8, 8, 8, 8);
+
+    // ── 主区域: 左颜色列表 | 右可缩放图+二值化预览 ──
+    auto *mainLayout = new QHBoxLayout();
+
+    // === 左: 颜色列表面板 ===
+    auto *leftPanel = new QVBoxLayout();
+    leftPanel->setSpacing(4);
+
+    auto *leftTitle = new QLabel(QString::fromUtf8("已选颜色"), &colorDlg);
+    leftTitle->setStyleSheet("font-weight: bold; color: #aaa; font-size: 12px;");
+    leftPanel->addWidget(leftTitle);
+
+    // 滚动区域装颜色行
+    QScrollArea *colorScroll = new QScrollArea(&colorDlg);
+    colorScroll->setWidgetResizable(true);
+    colorScroll->setFixedWidth(220);
+    colorScroll->setStyleSheet("QScrollArea { background: #1a1a1a; border: 1px solid #444; }");
+    QWidget *colorListWidget = new QWidget(&colorDlg);
+    colorListWidget->setStyleSheet("background: #1a1a1a;");
+    QVBoxLayout *colorListLayout = new QVBoxLayout(colorListWidget);
+    colorListLayout->setSpacing(2);
+    colorListLayout->setContentsMargins(4, 4, 4, 4);
+    colorListLayout->addStretch();
+    colorScroll->setWidget(colorListWidget);
+    leftPanel->addWidget(colorScroll, 1);
+
+    // 取色计数
+    auto *pixelCountLabel = new QLabel(QString::fromUtf8("0 个像素"), &colorDlg);
+    pixelCountLabel->setStyleSheet("color: #666; font-size: 11px;");
+    leftPanel->addWidget(pixelCountLabel);
+
+    // 重置按钮
+    auto *resetBtn = new QPushButton(QString::fromUtf8("🗑 全部重置"), &colorDlg);
+    resetBtn->setFixedHeight(28);
+    leftPanel->addWidget(resetBtn);
+
+    mainLayout->addLayout(leftPanel);
+
+    // === 右: 可缩放原图 + 二值化预览 ===
+    auto *rightPanel = new QVBoxLayout();
+    rightPanel->setSpacing(6);
+
+    auto *imgTitle = new QLabel(QString::fromUtf8("👆 滚轮缩放 | 点击像素取色 | 再点取消"), &colorDlg);
+    imgTitle->setStyleSheet("font-weight: bold; color: #ccc; font-size: 12px;");
+    rightPanel->addWidget(imgTitle);
+
+    // QGraphicsView 可缩放
+    QGraphicsScene *scene = new QGraphicsScene(&colorDlg);
+    QGraphicsView *view = new QGraphicsView(scene, &colorDlg);
+    view->setDragMode(QGraphicsView::ScrollHandDrag);
+    view->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+    view->setRenderHint(QPainter::Antialiasing, false);
+    view->setRenderHint(QPainter::SmoothPixmapTransform, false);  // 放大时保持像素锐利
+    view->setStyleSheet("background: #000; border: 2px solid #555;");
+    view->setMouseTracking(true);
+
+    QImage origImg = matToQImage(roi);
+    QPixmap origPix = QPixmap::fromImage(origImg);
+    QGraphicsPixmapItem *pixItem = scene->addPixmap(origPix);
+    view->fitInView(pixItem, Qt::KeepAspectRatio);
+    rightPanel->addWidget(view, 1);
+
+    // 二值化预览
+    auto *binTitle = new QLabel(QString::fromUtf8("二值化预览"), &colorDlg);
+    binTitle->setStyleSheet("color: #aaa; font-size: 11px;");
+    rightPanel->addWidget(binTitle);
+
+    QLabel *binLabel = new QLabel(&colorDlg);
+    binLabel->setAlignment(Qt::AlignCenter);
+    binLabel->setStyleSheet("background: #111; border: 1px solid #444;");
+    binLabel->setMinimumHeight(80);
+    binLabel->setScaledContents(false);
+    rightPanel->addWidget(binLabel);
+
+    mainLayout->addLayout(rightPanel, 1);
+    outerLayout->addLayout(mainLayout, 1);
+
+    // ── 底部按钮 ──
+    auto *btnLayout = new QHBoxLayout();
+    auto *okBtn = new QPushButton(QString::fromUtf8("✅ 确认"), &colorDlg);
+    auto *cancelBtn = new QPushButton(QString::fromUtf8("取消"), &colorDlg);
+    btnLayout->addStretch();
+    btnLayout->addWidget(okBtn);
+    btnLayout->addWidget(cancelBtn);
+    outerLayout->addLayout(btnLayout);
+
+    // ════════════════════════════════════════
+    // 状态管理 — 不继承全局颜色，从零开始
+    // 全局 filter 由工具栏"取色"按钮管理，可能已累积上万种颜色
+    // （±48偏色×几千种=全图命中→二值化全白）
+    // ════════════════════════════════════════
+    auto &lib = BitmapFontLib::Instance();
+    BflColorFilter tempFilter;  // 空——重新取色
+    QSet<QPoint> selectedPixels;
+    QVector<QGraphicsItem*> overlayItems;
+
+    // 更新全部: 颜色列表、二值化预览、蒙层
+    std::function<void()> updateAll;
+    updateAll = [&]() {
+        // tempFilter 由点击事件直接管理，此处只读
+
+        // ── 更新颜色列表（每行：色块 + 颜色+偏色范围 + ✕） ──
+        while (colorListLayout->count() > 1) {
+            QLayoutItem *item = colorListLayout->takeAt(0);
+            if (item->widget()) {
+                delete item->widget();
+            } else if (item->layout()) {
+                // 先取出子 widget 用 deleteLater 延迟删除（避免信号回调中删除发送者）
+                QLayout *subLayout = item->layout();
+                while (subLayout->count() > 0) {
+                    QLayoutItem *subItem = subLayout->takeAt(0);
+                    if (subItem->widget()) subItem->widget()->deleteLater();
+                    delete subItem;
+                }
+            }
+            delete item;
+        }
+
+        infof("[BFL] updateAll: rebuilding color list, points.size()={}", tempFilter.points.size());
+        for (int ci = 0; ci < tempFilter.points.size(); ci++) {
+            const auto &pt = tempFilter.points[ci];
+            QColor c = pt.color;
+            infof("[BFL] updateAll: row[{}] RGB({},{},{})", ci, c.red(), c.green(), c.blue());
+            QColor bias = pt.bias;
+            QString hex = QString("#%1%2%3")
+                .arg(c.red(), 2, 16, QChar('0'))
+                .arg(c.green(), 2, 16, QChar('0'))
+                .arg(c.blue(), 2, 16, QChar('0'));
+
+            auto *row = new QHBoxLayout();
+            row->setSpacing(4);
+
+            auto *swatch = new QLabel(&colorDlg);
+            swatch->setFixedSize(18, 18);
+            swatch->setStyleSheet(QString("background: %1; border: 1px solid #555;").arg(hex));
+            row->addWidget(swatch);
+
+            auto *info = new QLabel(
+                QString("%1 ±%2").arg(hex).arg(bias.red()), &colorDlg);
+            info->setStyleSheet("color: #ccc; font-size: 11px;");
+            row->addWidget(info, 1);
+
+            auto *delBtn = new QPushButton(QString::fromUtf8("✕"), &colorDlg);
+            delBtn->setFixedSize(20, 20);
+            delBtn->setStyleSheet("QPushButton { color: #f66; background: transparent; border: none; font-size: 12px; } QPushButton:hover { color: #f00; }");
+            // 用颜色值做唯一标识，避免下标过期
+            QColor capturedColor = pt.color;
+            connect(delBtn, &QPushButton::clicked, [&, capturedColor, delBtn]() {
+                // 检查颜色是否还存在（可能已被删除，旧按钮残留事件）
+                bool stillExists = false;
+                for (int ci2 = 0; ci2 < tempFilter.points.size(); ci2++) {
+                    if (tempFilter.points[ci2].color == capturedColor) {
+                        stillExists = true;
+                        break;
+                    }
+                }
+                if (!stillExists) return;
+
+                infof("[BFL] delBtn: deleting color RGB({},{},{})", capturedColor.red(), capturedColor.green(), capturedColor.blue());
+                // 按颜色值查找并删除
+                for (int ci2 = 0; ci2 < tempFilter.points.size(); ci2++) {
+                    if (tempFilter.points[ci2].color == capturedColor) {
+                        tempFilter.points.removeAt(ci2);
+                        break;
+                    }
+                }
+                // 不能在 clicked 回调里直接 updateAll（会 delete delBtn 自身导致崩溃）
+                // 延迟到下一个事件循环再重建
+                QTimer::singleShot(0, [&]() {
+                    // 基于剩余颜色重扫蒙层
+                    selectedPixels.clear();
+                    for (int ci2 = 0; ci2 < tempFilter.points.size(); ci2++) {
+                        const auto &pt2 = tempFilter.points[ci2];
+                        int cr2 = pt2.color.red(), cg2 = pt2.color.green(), cb2 = pt2.color.blue();
+                        int br2 = pt2.bias.red();
+                        for (int y = 0; y < roi.rows; y++) {
+                            for (int x = 0; x < roi.cols; x++) {
+                                int r, g, b;
+                                if (roi.channels() == 4) {
+                                    cv::Vec4b bg = roi.at<cv::Vec4b>(y, x);
+                                    r = bg[2]; g = bg[1]; b = bg[0];
+                                } else if (roi.channels() == 3) {
+                                    cv::Vec3b bg = roi.at<cv::Vec3b>(y, x);
+                                    r = bg[2]; g = bg[1]; b = bg[0];
+                                } else {
+                                    r = g = b = roi.at<uint8_t>(y, x);
+                                }
+                                if (abs(r - cr2) <= br2 && abs(g - cg2) <= br2 && abs(b - cb2) <= br2) {
+                                    selectedPixels.insert(QPoint(x, y));
+                                }
+                            }
+                        }
+                    }
+                    updateAll();
+                });
+            });
+            row->addWidget(delBtn);
+
+            colorListLayout->insertLayout(colorListLayout->count() - 1, row);
+        }
+
+        pixelCountLabel->setText(QString::fromUtf8("%1 个像素").arg(selectedPixels.size()));
+
+        // ── 更新二值化预览 ──
+        {
+            BflColorFilter savedFilter = lib.colorFilter();
+            lib.setColorFilter(tempFilter);
+            cv::Mat bin = lib.binarize(roi);
+            lib.setColorFilter(savedFilter);
+
+            infof("[BFL] preview: points={} selected={} bin={}x{} empty={}",
+                  tempFilter.points.size(), selectedPixels.size(), bin.cols, bin.rows, bin.empty());
+
+            if (!bin.empty()) {
+                QImage binImg = matToQImage(bin);
+                infof("[BFL] preview: QImage={}x{} fmt={}", binImg.width(), binImg.height(), (int)binImg.format());
+                int targetH = qMin(120, qMax(40, roi.rows * 6));
+                QPixmap scaled = QPixmap::fromImage(binImg).scaledToHeight(targetH, Qt::FastTransformation);
+                infof("[BFL] preview: scaled={}x{} isNull={}", scaled.width(), scaled.height(), scaled.isNull());
+                binLabel->setPixmap(scaled);
+                binLabel->setMinimumHeight(targetH);
+                binLabel->setMinimumWidth(scaled.width());
+            } else {
+                infof("[BFL] bin preview: EMPTY binarize result");
+                binLabel->clear();
+            }
+        }
+
+        // ── 更新蒙层（遮罩图替代逐个rect） ──
+        for (auto *item : overlayItems) scene->removeItem(item);
+        qDeleteAll(overlayItems);
+        overlayItems.clear();
+        if (!selectedPixels.isEmpty()) {
+            // 创建半透明遮罩图像
+            QImage overlay(roi.cols, roi.rows, QImage::Format_ARGB32_Premultiplied);
+            overlay.fill(Qt::transparent);
+            QColor markerColor(255, 80, 80, 120);
+            for (const QPoint &p : selectedPixels) {
+                overlay.setPixelColor(p.x(), p.y(), markerColor);
+            }
+            QPixmap overlayPix = QPixmap::fromImage(overlay);
+            auto *ovItem = scene->addPixmap(overlayPix);
+            ovItem->setZValue(1);
+            overlayItems.append(ovItem);
+        }
+    };
+
+    // ── 事件过滤器: 滚轮缩放 + 鼠标点击取色 ──
+    class ViewEventFilter : public QObject {
+    public:
+        QGraphicsView *view;
+        std::function<void(int, int)> onClick;  // (imgX, imgY)
+
+        ViewEventFilter(QGraphicsView *v, std::function<void(int,int)> cb)
+            : view(v), onClick(cb) {}
+
+        bool eventFilter(QObject *obj, QEvent *event) override {
+            if (event->type() == QEvent::Wheel) {
+                QWheelEvent *we = static_cast<QWheelEvent*>(event);
+                double factor = we->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
+                view->scale(factor, factor);
+                return true;
+            }
+            if (event->type() == QEvent::MouseButtonPress) {
+                QMouseEvent *me = static_cast<QMouseEvent*>(event);
+                if (me->button() == Qt::LeftButton) {
+                    QPointF sp = view->mapToScene(me->pos());
+                    int px = qBound(0, (int)sp.x(), (int)(view->scene()->width() - 1));
+                    int py = qBound(0, (int)sp.y(), (int)(view->scene()->height() - 1));
+                    onClick(px, py);
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+
+    ViewEventFilter viewFilter(view, [&](int px, int py) {
+        // 获取点击像素颜色
+        QColor clickedColor;
+        if (roi.channels() == 4) {
+            cv::Vec4b bgra = roi.at<cv::Vec4b>(py, px);
+            clickedColor = QColor(bgra[2], bgra[1], bgra[0]);
+        } else if (roi.channels() == 3) {
+            cv::Vec3b bgr = roi.at<cv::Vec3b>(py, px);
+            clickedColor = QColor(bgr[2], bgr[1], bgr[0]);
+        } else {
+            uint8_t gray = roi.at<uint8_t>(py, px);
+            clickedColor = QColor(gray, gray, gray);
+        }
+
+        // 颜色范围：±48 偏色
+        int bias = 0x30;
+        int cr = clickedColor.red(), cg = clickedColor.green(), cb = clickedColor.blue();
+
+        // 已蒙层的像素点击无反应，取消蒙层只能通过左侧颜色列表✕按钮
+        QPoint clickedPt(px, py);
+        if (selectedPixels.contains(clickedPt)) {
+            return;
+        }
+
+        {
+            // 扫描整张ROI，颜色范围内的像素全选上
+            for (int y = 0; y < roi.rows; y++) {
+                for (int x = 0; x < roi.cols; x++) {
+                    int r, g, b;
+                    if (roi.channels() == 4) {
+                        cv::Vec4b bg = roi.at<cv::Vec4b>(y, x);
+                        r = bg[2]; g = bg[1]; b = bg[0];
+                    } else if (roi.channels() == 3) {
+                        cv::Vec3b bg = roi.at<cv::Vec3b>(y, x);
+                        r = bg[2]; g = bg[1]; b = bg[0];
+                    } else {
+                        r = g = b = roi.at<uint8_t>(y, x);
+                    }
+                    if (abs(r - cr) <= bias && abs(g - cg) <= bias && abs(b - cb) <= bias) {
+                        selectedPixels.insert(QPoint(x, y));
+                    }
+                }
+            }
+            tempFilter.add(clickedColor);
+        }
+        infof("[BFL] onClick: before updateAll, points={}", tempFilter.points.size());
+        updateAll();
+        infof("[BFL] onClick: after updateAll");
+    });
+    view->viewport()->installEventFilter(&viewFilter);
+
+    // ── 初始显示 ──
+    updateAll();
+
+    // ── 重置按钮 ──
+    connect(resetBtn, &QPushButton::clicked, [&]() {
+        selectedPixels.clear();
+        updateAll();
+    });
+
+    connect(okBtn, &QPushButton::clicked, &colorDlg, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, &colorDlg, &QDialog::reject);
+
+    if (colorDlg.exec() != QDialog::Accepted) {
+        m_imageLabel->clearSelection();
+        return;
+    }
+
+    // 确认: 把临时过滤器写回全局
+    lib.setColorFilter(tempFilter);
+
+    // ═══ 步骤2: 最终二值化（整行作为一个整体训练） ═══
+    cv::Mat binary = lib.binarize(roi);
+
+    if (binary.empty() || cv::countNonZero(binary) == 0) {
+        QMessageBox::warning(this, QString::fromUtf8("二值化失败"),
+            QString::fromUtf8("未检测到前景像素！请确认:\n"
+                              "1. 已取色(至少点一个文字像素)\n"
+                              "2. 框选的确实是文字区域"));
+        m_imageLabel->clearSelection();
+        return;
+    }
+
+    // 裁掉上下空白行
+    {
+        cv::Mat rowSums;
+        cv::reduce(binary, rowSums, 1, cv::REDUCE_SUM, CV_32S);
+        int top = 0, bottom = binary.rows - 1;
+        for (; top < binary.rows && rowSums.at<int>(top) == 0; top++);
+        for (; bottom >= 0 && rowSums.at<int>(bottom) == 0; bottom--);
+        if (top <= bottom)
+            binary = binary(cv::Rect(0, top, binary.cols, bottom - top + 1)).clone();
+    }
+
+    // 裁掉左右空白列
+    {
+        cv::Mat colSums;
+        cv::reduce(binary, colSums, 0, cv::REDUCE_SUM, CV_32S);
+        int left = 0, right = binary.cols - 1;
+        for (; left < binary.cols && colSums.at<int>(left) == 0; left++);
+        for (; right >= 0 && colSums.at<int>(right) == 0; right--);
+        if (left <= right)
+            binary = binary(cv::Rect(left, 0, right - left + 1, binary.rows)).clone();
+    }
+
+    // ═══ 步骤3: 预览 + 输入文字 ═══
+    QDialog dlg(this);
+    dlg.setWindowTitle(QString::fromUtf8("字库训练"));
+    auto *dl = new QVBoxLayout(&dlg);
+
+    auto *pl = new QLabel(&dlg);
+    pl->setPixmap(QPixmap::fromImage(matToQImage(roi)));
+    pl->setAlignment(Qt::AlignCenter);
+    pl->setStyleSheet("background-color: #000;");
+    dl->addWidget(pl);
+
+    auto *bi = new QLabel(&dlg);
+    bi->setPixmap(QPixmap::fromImage(matToQImage(binary)));
+    bi->setAlignment(Qt::AlignCenter);
+    bi->setStyleSheet("background-color: #000;");
+    dl->addWidget(bi);
+
+    auto *te = new QLineEdit(&dlg);
+    te->setPlaceholderText(QString::fromUtf8("输入这行文字（如：前往洛阳）"));
+    dl->addWidget(te);
+
+    auto *bl = new QHBoxLayout();
+    auto *ok = new QPushButton(QString::fromUtf8("训练"), &dlg);
+    auto *cancel = new QPushButton(QString::fromUtf8("取消"), &dlg);
+    bl->addStretch();
+    bl->addWidget(ok);
+    bl->addWidget(cancel);
+    dl->addLayout(bl);
+
+    connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
+    connect(cancel, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        m_imageLabel->clearSelection();
+        return;
+    }
+
+    QString text = te->text().trimmed();
+    if (text.isEmpty()) { m_imageLabel->clearSelection(); return; }
+
+    // 整行作为一个整体训练，charName = 用户输入的整行文字
+    lib.addChar(text.toUtf8().toStdString(), binary);
+
+    updateBflStatus();
+    QMessageBox::information(this, QString::fromUtf8("训练完成"),
+        QString::fromUtf8("已训练整行: \"%1\" (%2x%3)").arg(text).arg(binary.cols).arg(binary.rows));
+
+    m_imageLabel->clearSelection();
+}
+
+// 测试：框选 → binarize → 切字 → recognize → 显示
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::handleBflTestSelection(const QRect &sel)
+{
+    if (m_currentFrame.empty()) return;
+
+    QSize pixSize = m_currentPixmap.size();
+    double fsx = (double)m_currentFrame.cols / pixSize.width();
+    double fsy = (double)m_currentFrame.rows / pixSize.height();
+    int frx = qBound(0, (int)(sel.x() * fsx), m_currentFrame.cols - 1);
+    int fry = qBound(0, (int)(sel.y() * fsy), m_currentFrame.rows - 1);
+    int frw = qBound(1, (int)(sel.width() * fsx), m_currentFrame.cols - frx);
+    int frh = qBound(1, (int)(sel.height() * fsy), m_currentFrame.rows - fry);
+
+    cv::Mat roi = m_currentFrame(cv::Rect(frx, fry, frw, frh)).clone();
+    cv::Mat binary = BitmapFontLib::Instance().binarize(roi);
+    auto charRects = BitmapFontLib::segmentChars(binary, 2);
+
+    auto &lib = BitmapFontLib::Instance();
+    auto results = lib.findString(binary, 0.85);
+
+    if (results.empty() || charRects.empty()) {
+        QMessageBox::information(this, QString::fromUtf8("\u8bc6\u522b\u7ed3\u679c"),
+            QString::fromUtf8("\u672a\u8bc6\u522b\u5230\u5b57\u7b26"));
+        m_imageLabel->clearSelection();
+        return;
+    }
+
+    // 在roi图上画识别结果
+    cv::Mat display = roi.clone();
+    QStringList detailLines;
+    QString text;
+
+    for (const auto &r : results) {
+        cv::Scalar color = r.similarity > 0.9
+            ? cv::Scalar(0, 255, 0)
+            : (r.similarity > 0.8
+                ? cv::Scalar(0, 200, 255) : cv::Scalar(0, 0, 255));
+
+        cv::Rect glyphRect(r.x, r.y, r.width, r.height);
+        cv::rectangle(display, glyphRect, color, 2);
+
+        QString ch = QString::fromStdString(r.charName);
+        text += ch;
+        detailLines.append(
+            QString("%1 (%2,%3) %4%")
+                .arg(ch).arg(r.x).arg(r.y)
+                .arg((int)(r.similarity * 100)));
+    }
+
+    // 显示识别画面
+    QImage resultImg = matToQImage(display);
+    QPixmap resultPix = QPixmap::fromImage(resultImg);
+    m_imageLabel->setPixmap(resultPix);
+    m_imageLabel->resize(resultPix.size());
+
+    QMessageBox::information(this,
+        QString::fromUtf8("\u5b57\u5e93\u8bc6\u522b\u7ed3\u679c"),
+        QString::fromUtf8("\u8bc6\u522b\u6587\u5b57: %1\n\n\u8be6\u60c5:\n%2")
+            .arg(text, detailLines.join("\n")));
+
+    m_imageLabel->clearSelection();
+}
+
+void GameItemCaptureWidget::handleBflColorPick(const QRect &sel)
+{
+    if (m_currentFrame.empty()) return;
+
+    // 选区的中心点作为取色点
+    QSize pixSize = m_currentPixmap.size();
+    double fsx = (double)m_currentFrame.cols / pixSize.width();
+    double fsy = (double)m_currentFrame.rows / pixSize.height();
+    int cx = qBound(0, (int)(sel.center().x() * fsx), m_currentFrame.cols - 1);
+    int cy = qBound(0, (int)(sel.center().y() * fsy), m_currentFrame.rows - 1);
+
+    // 取像素颜色（BGR→RGB）
+    auto &lib = BitmapFontLib::Instance();
+    BflColorFilter filter = lib.colorFilter();
+
+    QColor pickedColor;
+    if (m_currentFrame.channels() >= 3) {
+        cv::Vec3b bgr = m_currentFrame.at<cv::Vec3b>(cy, cx);
+        pickedColor = QColor(bgr[2], bgr[1], bgr[0]);
+    } else {
+        uint8_t gray = m_currentFrame.at<uint8_t>(cy, cx);
+        pickedColor = QColor(gray, gray, gray);
+    }
+
+    // 追加颜色（不替换之前的）
+    filter.add(pickedColor);
+    lib.setColorFilter(filter);
+
+    // 更新颜色标签 — 显示多色色块
+    int n = filter.points.size();
+    QString tip = QString::fromUtf8("已取 %1 种颜色:").arg(n);
+    for (int i = 0; i < n; i++) {
+        const auto &pt = filter.points[i];
+        QString h = QString("#%1%2%3")
+            .arg(pt.color.red(), 2, 16, QChar('0'))
+            .arg(pt.color.green(), 2, 16, QChar('0'))
+            .arg(pt.color.blue(), 2, 16, QChar('0'));
+        tip += QString("\n  %1 (%2)").arg(h).arg(i + 1);
+    }
+    m_bflColorLabel->setToolTip(tip);
+
+    // 用最后取的颜色做标签底色
+
+    // 用最后取的颜色做标签底色
+    QString lastHex = QString("#%1%2%3")
+        .arg(pickedColor.red(), 2, 16, QChar('0'))
+        .arg(pickedColor.green(), 2, 16, QChar('0'))
+        .arg(pickedColor.blue(), 2, 16, QChar('0'));
+    m_bflColorLabel->setText(QString::fromUtf8("🎨 ×%1").arg(n));
+    m_bflColorLabel->setStyleSheet(
+        QString("background: %1; color: %2; border: 1px solid #999; padding: 0 8px; border-radius: 3px; font-weight: bold;")
+            .arg(lastHex)
+            .arg(pickedColor.lightness() > 128 ? "#000" : "#FFF"));
+
+    infof("[BFL] 取色 #%d: ({},{}) → %s (共%d种)",
+          n, cx, cy, lastHex.toStdString().c_str(), n);
+
+    m_imageLabel->clearSelection();
 }

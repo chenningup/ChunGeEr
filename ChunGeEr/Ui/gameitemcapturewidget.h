@@ -10,10 +10,13 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QComboBox>
-#include <QCheckBox>
 #include <QHash>
 #include <opencv2/opencv.hpp>
 #include <windows.h>
+#include <QPainter>
+#include <QPen>
+#include <QFont>
+#include "../bitmapfontlib.h"
 
 // ════════════════════════════════════════════════
 // 自定义图片标签：支持鼠标框选
@@ -62,6 +65,10 @@ private slots:
     void onCaptureTick();           // 定时截图刷新
     void onSelectSaveDir();         // 选择保存目录
     void onRoiModeToggle();         // ROI模式切换
+    void onFontLibLoad();           // 加载字库
+    void onFontLibSave();           // 保存字库
+    void onFontLibTrain();          // 进入字库训练模式
+    void onFontLibTest();           // 进入字库测试模式
 
 private:
     HWND findGameWindow();                       // 找游戏窗口
@@ -71,6 +78,10 @@ private:
     void loadImagesFromDir();
     void rebuildActivePaths();                   // 从列表选中项重建路径+缓存
     void saveRoi(const QString &roiKey, const QRect &rect);  // 保存ROI到config
+    void handleBflTrainSelection(const QRect &sel);   // 字库训练：框选→binarize→切字→标注→addSample
+    void handleBflTestSelection(const QRect &sel);    // 字库测试：框选→binarize→切字→recognize→显示
+    void handleBflColorPick(const QRect &sel);        // 取色：点选像素→更新颜色过滤器
+    void updateBflStatus();                            // 刷新字库状态标签
 
     // ── UI控件 ──
     QTimer          *m_captureTimer;
@@ -96,6 +107,19 @@ private:
     QStringList m_selectedPaths;
     bool     m_loadingList;          // 防止加载时触发信号
     QHash<QString, cv::Mat> m_templateCache;  // 模板缓存，避免每帧读磁盘
+
+    // ── 点阵字库 ──
+    QPushButton     *m_trainBflBtn;
+    QPushButton     *m_testBflBtn;
+    QPushButton     *m_loadBflBtn;
+    QPushButton     *m_saveBflBtn;
+    QLabel          *m_bflStatusLabel;
+    bool             m_bflTrainingMode;
+    bool             m_bflTestMode;
+    bool             m_bflColorPickMode;
+    QString          m_bflPath;
+    QPushButton     *m_bflColorBtn;
+    QLabel          *m_bflColorLabel;
 };
 
 #endif // GAMEITEMCAPTUREWIDGET_H

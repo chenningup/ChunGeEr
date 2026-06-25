@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QStackedWidget>
 #include <QThread>
+#include <QList>
 #include "nlohmann/json.hpp"
 #include "service/baseservice.h"
 #include "Ui/screensharewidget.h"
@@ -24,6 +25,7 @@ class QVBoxLayout;
 class QWidget;
 class QGroupBox;
 class QSpinBox;
+class QHBoxLayout;
 
 typedef std::function<void(const json &data)> HandelClientRecMegFun;
 class MainWindow : public QMainWindow
@@ -67,9 +69,9 @@ private slots:
     void on_loginBtn_clicked();
     void on_singleLoginBtn_clicked(int idx);
     void on_startAllBtn_clicked();
-    void on_accountStartBtn_clicked(int idx);
     void on_unifiedTaskChanged(int index);
     void on_accountComboChanged(int idx);
+    void updateDungeonVisibility(int taskIndex);
 
 private:
     void setupTaskConfigs();
@@ -84,6 +86,7 @@ private:
     void startSingleTask(int slotIdx);
 
     // ── 串行登录流程 ──
+    bool checkSavedHwnd(int idx);            // 检测已存hwnd是否有效
     void beginLoginSequence();          // 开始依次登录
     void loginNextSlot();               // 登录下一个窗口
     void onLoginFinished(bool success);  // 单个窗口登录完成回调
@@ -125,13 +128,16 @@ private:
     QGroupBox *m_taskPanel = nullptr;
     QVBoxLayout *m_taskPanelLayout = nullptr;
     QWidget *m_taskRowsWidget = nullptr;
-    QVBoxLayout *m_taskRowsLayout = nullptr;
+    QHBoxLayout *m_taskRowsLayout = nullptr;
     QComboBox *m_unifiedTaskCombo = nullptr;
     QComboBox *m_taskDungeonCombo = nullptr;
     QSpinBox *m_dungeonSpin = nullptr;
+    QLabel *m_dungeonLabel = nullptr;
+    QLabel *m_dungeonTypeLabel = nullptr;
     QPushButton *m_startAllBtn = nullptr;
-    QComboBox *m_accountTaskCombos[3] = {};
-    QPushButton *m_accountStartBtns[3] = {};
+    QComboBox *m_windowCombo = nullptr;
+    QPushButton *m_addWindowBtn = nullptr;
+    QList<int> m_selectedWindows;
 };
 
 #endif // MAINWINDOW_H

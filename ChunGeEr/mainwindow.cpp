@@ -1,4 +1,4 @@
-﻿#include "mainwindow.h"
+#include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "screencapturemanager.h"
 #include "./StorageVideo/StorageVidoeManager.h"
@@ -109,6 +109,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupTaskConfigs();
     loadAccountCombo();
+
+    // 启动时自动检测已保存的hwnd，有效则直接标记已登录
+    for (int i = 0; i < 3; ++i) {
+        checkSavedHwnd(i);
+    }
+    refreshTaskPanel();
 }
 
 MainWindow::~MainWindow()
@@ -501,26 +507,57 @@ void MainWindow::on_startStopBtn_clicked()
     refreshTaskPanel();
 }
 
+// 检测已存的 hwnd 是否仍有效，有效则标记已登录，返回 true
+bool MainWindow::checkSavedHwnd(int idx)
+{
+    auto *slot = mScheduler->slot(idx);
+    if (!slot || slot->isLoggedIn()) return true;
+
+    QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+    qlonglong savedHwnd = settings.value(QString("Accounts/Slot%1/Hwnd").arg(idx)).toLongLong();
+    if (savedHwnd == 0) return false;
+
+    HWND hwnd = reinterpret_cast<HWND>(savedHwnd);
+    if (!IsWindow(hwnd)) {
+        infof("[MainWindow] Slot{} hwnd={} 已失效，清除", idx, savedHwnd);
+        settings.remove(QString("Accounts/Slot%1/Hwnd").arg(idx));
+        return false;
+    }
+
+    infof("[MainWindow] Slot{} hwnd={} 有效，标记已登录", idx, savedHwnd);
+    slot->setHwnd(hwnd);
+    slot->setLoggedIn(true);
+    slot->setState(GameSlot::Idle);
+    if (m_statusLabels[idx]) {
+        m_statusLabels[idx]->setText(QString::fromUtf8("已登录"));
+        m_statusLabels[idx]->setStyleSheet("color: #090;");
+    }
+    ui->textEdit->append(QString::fromUtf8("窗口%1 检测到已在线 (hwnd=0x%2)，跳过登录").arg(idx + 1).arg(savedHwnd, 0, 16));
+    return true;
+}
+
 void MainWindow::beginLoginSequence()
 {
     m_loginQueue.clear();
     m_loginSuccessCount = 0;
 
-    // 收集未登录的窗口
     for (int i = 0; i < 3; i++) {
+        if (checkSavedHwnd(i)) continue;
         auto *slot = mScheduler->slot(i);
-        if (slot && !slot->isLoggedIn() && slot->state() != GameSlot::Searching) {
+        if (slot && slot->state() != GameSlot::Searching) {
             m_loginQueue.append(i);
         }
     }
 
     if (m_loginQueue.isEmpty()) {
         ui->statuslabel->setText(QString::fromUtf8("没有需要登录的窗口"));
+        refreshTaskPanel();
         return;
     }
 
     loginNextSlot();
 }
+
 
 void MainWindow::loginNextSlot()
 {
@@ -577,6 +614,12 @@ void MainWindow::onLoginFinished(bool success)
             m_loginSuccessCount++;
             slot->setLoggedIn(true);
             slot->setState(GameSlot::Running);
+            // 保存 hwnd 到 config.ini
+            if (slot->hwnd()) {
+                QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+                settings.setValue(QString("Accounts/Slot%1/Hwnd").arg(idx), reinterpret_cast<qlonglong>(slot->hwnd()));
+                ui->textEdit->append(QString::fromUtf8("窗口%1 hwnd已保存 (0x%2)").arg(idx + 1).arg(reinterpret_cast<qlonglong>(slot->hwnd()), 0, 16));
+            }
             removeActiveTask(idx);
             addActiveTask(idx, slot->taskName());
             if (m_statusLabels[idx]) { m_statusLabels[idx]->setText(QString::fromUtf8("\u5df2\u767b\u5f55")); m_statusLabels[idx]->setStyleSheet("color: #090;"); }
@@ -849,7 +892,7 @@ void MainWindow::buildTaskPanel()
     taskBarLayout->setContentsMargins(0, 0, 0, 0);
     taskBarLayout->setSpacing(4);
 
-    taskBarLayout->addWidget(new QLabel(QString::fromUtf8("\u7edf\u4e00\u8bbe\u4e3a:"), taskBar));
+    taskBarLayout->addWidget(new QLabel(QString::fromUtf8("\u4efb\u52a1:"), taskBar));
     m_unifiedTaskCombo = new QComboBox(taskBar);
     m_unifiedTaskCombo->addItems({QString::fromUtf8("\u526f\u672c"), QString::fromUtf8("\u4e3b\u7ebf\u4efb\u52a1"),
                                   QString::fromUtf8("\u5192\u9669"), QString::fromUtf8("\u4e00\u6761\u9f99")});
@@ -858,13 +901,17 @@ void MainWindow::buildTaskPanel()
             this, &MainWindow::on_unifiedTaskChanged);
     taskBarLayout->addWidget(m_unifiedTaskCombo);
 
-    taskBarLayout->addSpacing(4);
-    taskBarLayout->addWidget(new QLabel(QString::fromUtf8("\u6b21\u6570:"), taskBar));
+    m_dungeonLabel = new QLabel(QString::fromUtf8("\u6b21\u6570:"), taskBar);
+    m_dungeonLabel->setFixedWidth(32);
+    taskBarLayout->addWidget(m_dungeonLabel);
     m_dungeonSpin = new QSpinBox(taskBar);
     m_dungeonSpin->setRange(1, 99);
     m_dungeonSpin->setFixedWidth(44);
     taskBarLayout->addWidget(m_dungeonSpin);
 
+    m_dungeonTypeLabel = new QLabel(QString::fromUtf8("\u526f\u672c:"), taskBar);
+    m_dungeonTypeLabel->setFixedWidth(32);
+    taskBarLayout->addWidget(m_dungeonTypeLabel);
     m_taskDungeonCombo = new QComboBox(taskBar);
     m_taskDungeonCombo->addItems({QString::fromUtf8("\u6076\u4eba\u8c37"), QString::fromUtf8("\u5c60\u72fc\u6d1e"),
                                   QString::fromUtf8("\u51e4\u9e23\u5c71"), QString::fromUtf8("\u51b0\u98ce\u6d1e"),
@@ -872,26 +919,45 @@ void MainWindow::buildTaskPanel()
     m_taskDungeonCombo->setFixedWidth(72);
     taskBarLayout->addWidget(m_taskDungeonCombo);
 
+    // 初始状态：选“副本”时显示，其他隐藏
+    updateDungeonVisibility(0);
+
+    // 窗口选择区
+    auto *winSelectLayout = new QHBoxLayout();
+    winSelectLayout->setSpacing(4);
+    m_windowCombo = new QComboBox(taskBar);
+    m_windowCombo->setFixedWidth(80);
+    winSelectLayout->addWidget(m_windowCombo);
+    m_addWindowBtn = new QPushButton(QString::fromUtf8("\u52a0\u5165"), taskBar);
+    m_addWindowBtn->setFixedSize(44, 24);
+    winSelectLayout->addWidget(m_addWindowBtn);
+    taskBarLayout->addLayout(winSelectLayout);
+
+    // 已选窗口标签区域（白色底色，放在加入按钮后面）
+    m_taskRowsWidget = new QWidget(taskBar);
+    m_taskRowsLayout = new QHBoxLayout(m_taskRowsWidget);
+    m_taskRowsLayout->setContentsMargins(2, 2, 2, 2);
+    m_taskRowsLayout->setSpacing(4);
+    m_taskRowsWidget->setStyleSheet("background-color: #ffffff; border: 1px solid #ccc; border-radius: 4px;");
+    m_taskRowsWidget->setFixedHeight(28);
+    taskBarLayout->addWidget(m_taskRowsWidget);
+
     taskBarLayout->addStretch();
-    m_startAllBtn = new QPushButton(QString::fromUtf8("\u5168\u90e8\u542f\u52a8"), taskBar);
-    m_startAllBtn->setFixedSize(72, 24);
+    m_startAllBtn = new QPushButton(QString::fromUtf8("\u542f\u52a8"), taskBar);
+    m_startAllBtn->setFixedSize(56, 24);
     connect(m_startAllBtn, &QPushButton::clicked, this, &MainWindow::on_startAllBtn_clicked);
     taskBarLayout->addWidget(m_startAllBtn);
 
     m_taskPanelLayout->addWidget(taskBar);
 
-    // 分隔线
-    auto *sep = new QFrame(m_taskPanel);
-    sep->setFrameShape(QFrame::HLine);
-    sep->setFrameShadow(QFrame::Sunken);
-    m_taskPanelLayout->addWidget(sep);
-
-    // 每个窗口的任务行（动态创建）
-    m_taskRowsWidget = new QWidget(m_taskPanel);
-    m_taskRowsLayout = new QVBoxLayout(m_taskRowsWidget);
-    m_taskRowsLayout->setContentsMargins(0, 0, 0, 0);
-    m_taskRowsLayout->setSpacing(2);
-    m_taskPanelLayout->addWidget(m_taskRowsWidget);
+    connect(m_addWindowBtn, &QPushButton::clicked, this, [this]() {
+        if (m_windowCombo->count() == 0) return;
+        int idx = m_windowCombo->currentData().toInt();
+        if (!m_selectedWindows.contains(idx)) {
+            m_selectedWindows.append(idx);
+            refreshTaskPanel();
+        }
+    });
 }
 
 // =============================================
@@ -899,15 +965,11 @@ void MainWindow::buildTaskPanel()
 // =============================================
 void MainWindow::refreshTaskPanel()
 {
-    // 清除旧行
+    // 清除旧标签行
     QLayoutItem *child;
     while ((child = m_taskRowsLayout->takeAt(0)) != nullptr) {
         if (child->widget()) child->widget()->deleteLater();
         delete child;
-    }
-    for (int i = 0; i < 3; i++) {
-        m_accountTaskCombos[i] = nullptr;
-        m_accountStartBtns[i] = nullptr;
     }
 
     // 检查是否有已登录账号
@@ -924,48 +986,50 @@ void MainWindow::refreshTaskPanel()
         m_modeStack->setCurrentIndex(0);
         m_accountModeBtn->setChecked(true);
         m_taskModeBtn->setChecked(false);
+        m_selectedWindows.clear();
+        if (m_windowCombo) m_windowCombo->clear();
         return;
     }
 
-    // 为每个已登录账号创建任务行
-    for (int i = 0; i < 3; i++) {
-        auto *slot = mScheduler->slot(i);
-        if (!slot || !slot->isLoggedIn()) continue;
+    // 刷新窗口下拉框（已登录但未加入的）
+    if (m_windowCombo) {
+        m_windowCombo->clear();
+        for (int i = 0; i < 3; i++) {
+            auto *slot = mScheduler->slot(i);
+            if (slot && slot->isLoggedIn() && !m_selectedWindows.contains(i)) {
+                m_windowCombo->addItem(QString::fromUtf8("\u7a97\u53e3%1").arg(i + 1), i);
+            }
+        }
+        m_addWindowBtn->setEnabled(m_windowCombo->count() > 0);
+    }
 
-        auto *row = new QWidget(m_taskRowsWidget);
-        auto *rowLayout = new QHBoxLayout(row);
-        rowLayout->setContentsMargins(0, 0, 0, 0);
-        rowLayout->setSpacing(4);
-
-        auto *nameLabel = new QLabel(QString("\u7a97\u53e3%1").arg(i + 1), row);
-        nameLabel->setFixedWidth(42);
-        rowLayout->addWidget(nameLabel);
-
-        m_accountTaskCombos[i] = new QComboBox(row);
-        m_accountTaskCombos[i]->addItems({QString::fromUtf8("\u526f\u672c"), QString::fromUtf8("\u4e3b\u7ebf\u4efb\u52a1"),
-                                          QString::fromUtf8("\u5192\u9669"), QString::fromUtf8("\u4e00\u6761\u9f99")});
-        m_accountTaskCombos[i]->setCurrentIndex(slot->taskType());
-        m_accountTaskCombos[i]->setFixedWidth(80);
-        rowLayout->addWidget(m_accountTaskCombos[i]);
-
-        if (slot->state() == GameSlot::Running && slot->service()) {
-            // 已在运行中
-            auto *runningLabel = new QLabel(QString::fromUtf8("\u25b6 \u8fd0\u884c\u4e2d"), row);
-            runningLabel->setStyleSheet("color: #090;");
-            rowLayout->addWidget(runningLabel);
+    // 创建已选窗口标签（直接加入 m_taskRowsLayout，现在是 QHBoxLayout）
+    for (int idx : m_selectedWindows) {
+        auto *slot = mScheduler->slot(idx);
+        QString stateText;
+        QString stateColor;
+        if (slot && slot->state() == GameSlot::Running && slot->service()) {
+            stateText = QString::fromUtf8("\u25b6");
+            stateColor = "color: #090;";
         } else {
-            m_accountStartBtns[i] = new QPushButton(QString::fromUtf8("\u25b6"), row);
-            m_accountStartBtns[i]->setFixedSize(28, 24);
-            m_accountStartBtns[i]->setToolTip(QString("\u542f\u52a8\u7a97\u53e3%1").arg(i + 1));
-            int idx = i;
-            connect(m_accountStartBtns[i], &QPushButton::clicked, this, [this, idx]() {
-                on_accountStartBtn_clicked(idx);
-            });
-            rowLayout->addWidget(m_accountStartBtns[i]);
+            stateText = QString::fromUtf8("\u25cb");
+            stateColor = "color: #999;";
         }
 
-        rowLayout->addStretch();
-        m_taskRowsLayout->addWidget(row);
+        auto *tag = new QPushButton(QString("\u7a97\u53e3%1 %2").arg(idx + 1).arg(stateText), m_taskRowsWidget);
+        tag->setStyleSheet(QString("QPushButton { background: #e8e8e8; border: 1px solid #bbb; border-radius: 3px; padding: 1px 6px; font-size: 12px; %1 }"
+                                   "QPushButton:hover { background: #f0a0a0; border-color: #e00; }"
+                                   "QPushButton:pressed { background: #d08080; }").arg(stateColor));
+        tag->setCursor(Qt::PointingHandCursor);
+        tag->setFixedHeight(22);
+
+        int tagIdx = idx;
+        connect(tag, &QPushButton::clicked, this, [this, tagIdx]() {
+            m_selectedWindows.removeAll(tagIdx);
+            refreshTaskPanel();
+        });
+
+        m_taskRowsLayout->addWidget(tag);
     }
 
     m_modeStack->setCurrentIndex(1);
@@ -1072,6 +1136,7 @@ void MainWindow::on_singleLoginBtn_clicked(int idx)
     auto *slot = mScheduler->slot(idx);
     if (!slot) { infof("[MainWindow] slot=%d 不存在", idx); return; }
     if (slot->isLoggedIn()) { infof("[MainWindow] slot=%d 已登录，跳过", idx); return; }
+    if (checkSavedHwnd(idx)) return;
 
     QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
     QString gamePath = settings.value("Accounts/GamePath").toString();
@@ -1117,6 +1182,7 @@ void MainWindow::on_loginBtn_clicked()
     for (int i = 0; i < 3; i++) {
         auto *slot = mScheduler->slot(i);
         if (!slot || slot->isLoggedIn()) continue;
+        if (checkSavedHwnd(i)) continue;
         QString ski = QString("Slot%1").arg(i);
         if (settings.value("Accounts/" + ski + "/Account").toString().isEmpty())
             continue;
@@ -1138,34 +1204,33 @@ void MainWindow::on_loginBtn_clicked()
 // =============================================
 void MainWindow::on_unifiedTaskChanged(int index)
 {
-    for (int i = 0; i < 3; i++) {
-        if (m_accountTaskCombos[i]) {
-            m_accountTaskCombos[i]->setCurrentIndex(index);
-        }
-    }
+    updateDungeonVisibility(index);
 }
 
 // =============================================
-// 全部启动
+// 副本下拉框显示/隐藏
+// =============================================
+void MainWindow::updateDungeonVisibility(int taskIndex)
+{
+    // taskIndex 0=副本, 1=主线任务, 2=冒险, 3=一条龙
+    bool showDungeon = (taskIndex == 0);
+    if (m_dungeonLabel) m_dungeonLabel->setVisible(showDungeon);
+    if (m_dungeonSpin) m_dungeonSpin->setVisible(showDungeon);
+    if (m_dungeonTypeLabel) m_dungeonTypeLabel->setVisible(showDungeon);
+    if (m_taskDungeonCombo) m_taskDungeonCombo->setVisible(showDungeon);
+}
+
+// =============================================
+// 启动（启动所有已加入的窗口）
 // =============================================
 void MainWindow::on_startAllBtn_clicked()
 {
-    for (int i = 0; i < 3; i++) {
-        auto *slot = mScheduler->slot(i);
-        if (slot && slot->isLoggedIn() && m_accountTaskCombos[i]) {
-            startSingleTask(i);
+    for (int idx : m_selectedWindows) {
+        auto *slot = mScheduler->slot(idx);
+        if (slot && slot->isLoggedIn()) {
+            startSingleTask(idx);
         }
     }
-}
-
-// =============================================
-// 单个启动
-// =============================================
-void MainWindow::on_accountStartBtn_clicked(int idx)
-{
-    auto *slot = mScheduler->slot(idx);
-    if (!slot || !slot->isLoggedIn()) return;
-    startSingleTask(idx);
 }
 
 // =============================================
@@ -1176,8 +1241,8 @@ void MainWindow::startSingleTask(int slotIdx)
     auto *slot = mScheduler->slot(slotIdx);
     if (!slot || !slot->isLoggedIn()) return;
 
-    GameSlot::TaskType taskType = (m_accountTaskCombos[slotIdx])
-        ? static_cast<GameSlot::TaskType>(m_accountTaskCombos[slotIdx]->currentIndex())
+    GameSlot::TaskType taskType = (m_unifiedTaskCombo)
+        ? static_cast<GameSlot::TaskType>(m_unifiedTaskCombo->currentIndex())
         : GameSlot::Dungeon;
 
     QString param;
@@ -1278,6 +1343,9 @@ void MainWindow::stopService()
     for (int i = 0; i < 3; i++) {
         auto *s = mScheduler->slot(i);
         if (s) { s->setLoggedIn(false); }
+        // 清除保存的 hwnd
+        QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+        settings.remove(QString("Accounts/Slot%1/Hwnd").arg(i));
     }
     for (auto it = m_activeTaskRows.begin(); it != m_activeTaskRows.end(); ++it) {
         it.value()->deleteLater();
@@ -1300,4 +1368,3 @@ void MainWindow::receiveLog(const QString &str)
 {
     ui->textEdit->append(str);
 }
-

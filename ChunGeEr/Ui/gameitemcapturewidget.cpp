@@ -1377,8 +1377,10 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
         return;
     }
 
-    // 确认: 把临时过滤器写回全局
-    lib.setColorFilter(tempFilter);
+    // 确认: 把临时颜色追加到全局过滤器（而非替换，保留之前训练的颜色）
+    for (const auto &pt : tempFilter.points) {
+        lib.colorFilterRef().add(pt.color, pt.bias);
+    }
 
     // ═══ 步骤2: 最终二值化（整行作为一个整体训练） ═══
     cv::Mat binary = lib.binarize(roi);
@@ -1479,13 +1481,33 @@ void GameItemCaptureWidget::handleBflTestSelection(const QRect &sel)
     int frh = qBound(1, (int)(sel.height() * fsy), m_currentFrame.rows - fry);
 
     cv::Mat roi = m_currentFrame(cv::Rect(frx, fry, frw, frh)).clone();
-    cv::Mat binary = BitmapFontLib::Instance().binarize(roi);
-    auto charRects = BitmapFontLib::segmentChars(binary, 2);
+    infof("[BFL-Test] ROI: {}x{} at ({},{})", frw, frh, frx, fry);
 
     auto &lib = BitmapFontLib::Instance();
-    auto results = lib.findString(binary, 0.85);
+    infof("[BFL-Test] colorFilter points={}, glyphs={}",
+          lib.colorFilter().points.size(), lib.charCount());
 
-    if (results.empty() || charRects.empty()) {
+    // findString 现在接收彩色图，每个字形用自己的colorFilter做binarize
+    auto results = lib.findString(roi, 0.85);
+    infof("[BFL-Test] findString(0.85): {} matches", results.size());
+    for (size_t i = 0; i < results.size() && i < 10; i++) {
+        infof("[BFL-Test]   match[{}]: char='{}' sim={:.3f} at ({},{}) {}x{}",
+              i, results[i].charName, results[i].similarity,
+              results[i].x, results[i].y, results[i].width, results[i].height);
+    }
+    // 如果0.85没结果，试试更低阈值
+    if (results.empty()) {
+        auto resultsLoose = lib.findString(roi, 0.5);
+        infof("[BFL-Test] findString(0.5): {} matches (loose)", resultsLoose.size());
+        for (size_t i = 0; i < resultsLoose.size() && i < 10; i++) {
+            infof("[BFL-Test]   loose[{}]: char='{}' sim={:.3f} at ({},{}) {}x{}",
+                  i, resultsLoose[i].charName, resultsLoose[i].similarity,
+                  resultsLoose[i].x, resultsLoose[i].y, resultsLoose[i].width, resultsLoose[i].height);
+        }
+        results = resultsLoose;
+    }
+
+    if (results.empty()) {
         QMessageBox::information(this, QString::fromUtf8("\u8bc6\u522b\u7ed3\u679c"),
             QString::fromUtf8("\u672a\u8bc6\u522b\u5230\u5b57\u7b26"));
         m_imageLabel->clearSelection();

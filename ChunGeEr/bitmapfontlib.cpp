@@ -27,6 +27,11 @@ BflColorFilter BitmapFontLib::colorFilter() const
     return m_colorFilter;
 }
 
+BflColorFilter &BitmapFontLib::colorFilterRef()
+{
+    return m_colorFilter;
+}
+
 // ════════════════════════════════════════════════
 // 二值化 — 基于颜色过滤
 // 遍历每个像素，任一取样颜色匹配→前景(255)
@@ -34,10 +39,15 @@ BflColorFilter BitmapFontLib::colorFilter() const
 // ════════════════════════════════════════════════
 cv::Mat BitmapFontLib::binarize(const cv::Mat &roi) const
 {
-    if (roi.empty() || m_colorFilter.isEmpty()) return {};
+    return binarizeWith(roi, m_colorFilter);
+}
 
-    infof("[BFL] binarize: input {}x{} ch={} colors={}",
-          roi.cols, roi.rows, roi.channels(), m_colorFilter.points.size());
+// ════════════════════════════════════════════════
+// 二值化 — 指定颜色过滤器
+// ════════════════════════════════════════════════
+cv::Mat BitmapFontLib::binarizeWith(const cv::Mat &roi, const BflColorFilter &filter) const
+{
+    if (roi.empty() || filter.isEmpty()) return {};
 
     // 转到BGR
     cv::Mat bgr;
@@ -53,26 +63,12 @@ cv::Mat BitmapFontLib::binarize(const cv::Mat &roi) const
 
     cv::Mat binary(roi.rows, roi.cols, CV_8UC1, cv::Scalar(0));
 
-    // 打印颜色范围（超过10种截断，避免日志爆炸）
-    int maxPrint = qMin(m_colorFilter.points.size(), 10);
-    for (int ci = 0; ci < maxPrint; ci++) {
-        const auto &pt = m_colorFilter.points[ci];
-        infof("[BFL] binarize: color[{}] = R{}(±{}) G{}(±{}) B{}(±{})",
-              ci, pt.color.red(), pt.bias.red(),
-              pt.color.green(), pt.bias.green(),
-              pt.color.blue(), pt.bias.blue());
-    }
-    if (m_colorFilter.points.size() > 10)
-        warnf("[BFL] binarize: {} colors total — 太多！二值化可能全白！",
-              m_colorFilter.points.size());
-
     for (int y = 0; y < roi.rows; y++) {
         const cv::Vec3b *row = bgr.ptr<cv::Vec3b>(y);
         uint8_t *out = binary.ptr<uint8_t>(y);
         for (int x = 0; x < roi.cols; x++) {
             int b = row[x][0], g = row[x][1], r = row[x][2];
-            // 任一颜色匹配即为前景
-            for (const auto &pt : m_colorFilter.points) {
+            for (const auto &pt : filter.points) {
                 int tr = pt.color.red(), tg = pt.color.green(), tb = pt.color.blue();
                 int br = pt.bias.red(), bg = pt.bias.green(), bb = pt.bias.blue();
                 if (abs(r - tr) <= br && abs(g - tg) <= bg && abs(b - tb) <= bb) {
@@ -82,10 +78,6 @@ cv::Mat BitmapFontLib::binarize(const cv::Mat &roi) const
             }
         }
     }
-
-    int whitePixels = cv::countNonZero(binary);
-    infof("[BFL] binarize: whitePixels={} totalPixels={} ratio={:.1f}%",
-          whitePixels, binary.total(), 100.0 * whitePixels / binary.total());
 
     return binary;
 }
@@ -311,6 +303,7 @@ bool BitmapFontLib::load(const QString &path)
     }
 
     m_glyphs.clear();
+    m_colorFilter.clear();
 
     QTextStream ts(&file);
     // Qt6默认UTF-8，无需setCodec
@@ -320,8 +313,37 @@ bool BitmapFontLib::load(const QString &path)
         QString line = ts.readLine().trimmed();
         lineNo++;
 
-        // 跳过空行和注释
-        if (line.isEmpty() || line.startsWith('#')) continue;
+        // 跳过空行
+        if (line.isEmpty()) continue;
+
+        // 解析颜色注释行: # BFL color: e52222 bias: 303030
+        if (line.startsWith("# BFL color:")) {
+            // 格式: # BFL color: RRGGBB bias: RRGGBB
+            QString rest = line.mid(QString("# BFL color:").length()).trimmed();
+            QStringList parts2 = rest.split("bias:");
+            if (parts2.size() >= 2) {
+                QString colorHex = parts2[0].trimmed();
+                QString biasHex = parts2[1].trimmed();
+                auto hexToColor = [](const QString &hex) -> QColor {
+                    if (hex.length() < 6) return QColor();
+                    int r = hex.mid(0,2).toInt(nullptr,16);
+                    int g = hex.mid(2,2).toInt(nullptr,16);
+                    int b = hex.mid(4,2).toInt(nullptr,16);
+                    return QColor(r,g,b);
+                };
+                BflColorPoint pt;
+                pt.color = hexToColor(colorHex);
+                pt.bias = hexToColor(biasHex);
+                m_colorFilter.points.append(pt);
+                infof("[BFL] load: restored color R{} G{} B{} bias R{} G{} B{}",
+                      pt.color.red(), pt.color.green(), pt.color.blue(),
+                      pt.bias.red(), pt.bias.green(), pt.bias.blue());
+            }
+            continue;
+        }
+
+        // 跳过其他注释
+        if (line.startsWith('#')) continue;
 
         // 旧格式兼容：跳过BFL1 magic标记
         if (line.startsWith("BFL1")) continue;
@@ -337,10 +359,24 @@ bool BitmapFontLib::load(const QString &path)
         g.effectivePixels = parts[2].toInt();
 
         // 5字段格式: hexBits$charName$effectivePixels$width$height
-        // 4字段兼容: hexBits$charName$effectivePixels$height
+        // 6字段格式: hexBits$charName$effectivePixels$width$height$colors
         if (parts.size() >= 5) {
             g.width = parts[3].toInt();
             g.height = parts[4].toInt();
+            // 6字段：解析字形独立颜色
+            if (parts.size() >= 6) {
+                // 格式: R,G,B|r,b,g|R,G,B|r,b,g|...
+                QStringList colorEntries = parts[5].split('|');
+                for (const QString &ce : colorEntries) {
+                    QStringList cv = ce.split(',');
+                    if (cv.size() >= 6) {
+                        BflColorPoint pt;
+                        pt.color = QColor(cv[0].toInt(), cv[1].toInt(), cv[2].toInt());
+                        pt.bias = QColor(cv[3].toInt(), cv[4].toInt(), cv[5].toInt());
+                        g.colorFilter.points.append(pt);
+                    }
+                }
+            }
         } else {
             g.height = parts[3].toInt();
             // 从hex长度和height反推宽度（包含补0对齐，略大于真实宽度）
@@ -367,7 +403,7 @@ bool BitmapFontLib::save(const QString &path) const
     QTextStream ts(&file);
     // Qt6默认UTF-8，无需setCodec
 
-    // 文件头注释
+    // 文件头注释（全局颜色，向后兼容）
     QStringList colorLines;
     for (const auto &pt : m_colorFilter.points) {
         colorLines.append(QString("# BFL color: %1%2%3 bias: %4%5%6")
@@ -387,7 +423,18 @@ bool BitmapFontLib::save(const QString &path) const
                << "$" << charName
                << "$" << g.effectivePixels
                << "$" << g.width
-               << "$" << g.height << "\n";
+               << "$" << g.height;
+            // 写入字形独立颜色（6字段格式）
+            if (!g.colorFilter.points.isEmpty()) {
+                QStringList colorStrs;
+                for (const auto &pt : g.colorFilter.points) {
+                    colorStrs.append(QString("%1,%2,%3|%4,%5,%6")
+                        .arg(pt.color.red()).arg(pt.color.green()).arg(pt.color.blue())
+                        .arg(pt.bias.red()).arg(pt.bias.green()).arg(pt.bias.blue()));
+                }
+                ts << "$" << colorStrs.join("|");
+            }
+            ts << "\n";
         }
     }
 
@@ -411,6 +458,7 @@ void BitmapFontLib::addChar(const std::string &charName, const cv::Mat &binaryCh
     if (binaryChar.empty() || charName.empty()) return;
 
     BflGlyph g = makeGlyph(binaryChar);
+    g.colorFilter = m_colorFilter;  // 训练时存当前全局颜色过滤器到字形
     QString key = QString::fromStdString(charName);
     m_glyphs[key].append(g);
 
@@ -449,23 +497,112 @@ int BitmapFontLib::trainFromLine(const cv::Mat &binaryLine, const QString &text)
 }
 
 // ════════════════════════════════════════════════
-// 寻找：滑动窗口 + 位比对
+// 寻找：每个字形用自己的颜色过滤器做binarize
 //
 // 对每个字库中的字形：
-//   1. 在搜索区域内，以字形尺寸为窗口滑动
-//   2. 每个窗口提取 → 转hex → compareBits比对
-//   3. 相似度 >= sim 的记录下来
-//
-// 窗口步长 = 1px（全精度搜索）
+//   1. 若字形有独立colorFilter，用它binarize原图；否则用全局m_colorFilter
+//   2. 以字形尺寸为窗口滑动
+//   3. 每个窗口提取 → 转hex → compareBits比对
+//   4. 相似度 >= sim 的记录下来
 // ════════════════════════════════════════════════
-std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &binary, double sim) const
+std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &image, double sim) const
+{
+    std::vector<BflFindResult> results;
+    if (image.empty() || m_glyphs.isEmpty()) return results;
+
+    int imgW = image.cols, imgH = image.rows;
+
+    for (auto it = m_glyphs.begin(); it != m_glyphs.end(); ++it) {
+        const std::string &charName = it.key().toStdString();
+        for (const BflGlyph &g : it.value()) {
+            if (g.width > imgW || g.height > imgH) continue;
+
+            // 用字形独立颜色binarize；没有则用全局
+            const BflColorFilter &cf = g.colorFilter.isEmpty() ? m_colorFilter : g.colorFilter;
+            cv::Mat binary = binarizeWith(image, cf);
+            if (binary.empty()) continue;
+
+            int maxX = imgW - g.width;
+            int maxY = imgH - g.height;
+
+            for (int y = 0; y <= maxY; y++) {
+                for (int x = 0; x <= maxX; x++) {
+                    cv::Rect roi(x, y, g.width, g.height);
+                    std::string windowHex = matToHex(binary(roi));
+                    double score = compareBits(windowHex, g.hexBits);
+
+                    if (score >= sim) {
+                        BflFindResult r;
+                        r.charName = charName;
+                        r.x = x;
+                        r.y = y;
+                        r.width = g.width;
+                        r.height = g.height;
+                        r.similarity = score;
+                        results.push_back(r);
+                    }
+                }
+            }
+        }
+    }
+
+    return results;
+}
+
+std::vector<BflFindResult> BitmapFontLib::findChar(const std::string &charName, const cv::Mat &image, double sim) const
+{
+    std::vector<BflFindResult> results;
+    if (image.empty()) return results;
+
+    QString key = QString::fromStdString(charName);
+    auto it = m_glyphs.find(key);
+    if (it == m_glyphs.end()) return results;
+
+    int imgW = image.cols, imgH = image.rows;
+
+    for (const BflGlyph &g : it.value()) {
+        if (g.width > imgW || g.height > imgH) continue;
+
+        const BflColorFilter &cf = g.colorFilter.isEmpty() ? m_colorFilter : g.colorFilter;
+        cv::Mat binary = binarizeWith(image, cf);
+        if (binary.empty()) continue;
+
+        int maxX = imgW - g.width;
+        int maxY = imgH - g.height;
+
+        for (int y = 0; y <= maxY; y++) {
+            for (int x = 0; x <= maxX; x++) {
+                cv::Rect roi(x, y, g.width, g.height);
+                std::string windowHex = matToHex(binary(roi));
+                double score = compareBits(windowHex, g.hexBits);
+
+                if (score >= sim) {
+                    BflFindResult r;
+                    r.charName = charName;
+                    r.x = x;
+                    r.y = y;
+                    r.width = g.width;
+                    r.height = g.height;
+                    r.similarity = score;
+                    results.push_back(r);
+                }
+            }
+        }
+    }
+
+    return results;
+}
+
+// ════════════════════════════════════════════════
+// 旧接口：在已二值化图像中查找（外部binarize）
+// ════════════════════════════════════════════════
+std::vector<BflFindResult> BitmapFontLib::findStringBinary(const cv::Mat &binary, double sim) const
 {
     std::vector<BflFindResult> results;
     if (binary.empty() || m_glyphs.isEmpty()) return results;
 
     int imgW = binary.cols, imgH = binary.rows;
 
-    // 遍历字库中所有字符的所有样本
     for (auto it = m_glyphs.begin(); it != m_glyphs.end(); ++it) {
         const std::string &charName = it.key().toStdString();
         for (const BflGlyph &g : it.value()) {
@@ -498,7 +635,7 @@ std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &binary, doub
     return results;
 }
 
-std::vector<BflFindResult> BitmapFontLib::findChar(const std::string &charName, const cv::Mat &binary, double sim) const
+std::vector<BflFindResult> BitmapFontLib::findCharBinary(const std::string &charName, const cv::Mat &binary, double sim) const
 {
     std::vector<BflFindResult> results;
     if (binary.empty()) return results;

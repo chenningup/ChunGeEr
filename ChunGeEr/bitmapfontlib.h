@@ -44,6 +44,7 @@ struct BflGlyph {
     int width = 0;
     int height = 0;
     int effectivePixels = 0; // 有效像素数（1的个数）
+    BflColorFilter colorFilter; // 该字形训练时的颜色过滤器（独立存储）
 };
 
 // ── 查找结果 ──
@@ -67,15 +68,19 @@ public:
     // ════════════════════════════════════════════
     void setColorFilter(const BflColorFilter &filter);
     BflColorFilter colorFilter() const;
+    BflColorFilter &colorFilterRef();
 
     // ════════════════════════════════════════════
     // 二值化 — 基于颜色过滤（替代固定阈值）
     // ════════════════════════════════════════════
 
-    /// 根据颜色过滤器将ROI二值化
+    /// 根据颜色过滤器将ROI二值化（用全局 m_colorFilter）
     /// roi: 输入彩色图片（BGR/BGRA均可）
     /// 返回: 前景=255，背景=0
     cv::Mat binarize(const cv::Mat &roi) const;
+
+    /// 根据指定颜色过滤器将ROI二值化（用于字形独立颜色）
+    cv::Mat binarizeWith(const cv::Mat &roi, const BflColorFilter &filter) const;
 
     // ════════════════════════════════════════════
     // 点阵转换（大漠格式）
@@ -130,13 +135,19 @@ public:
     // 查找/识别（大漠风格 FindStr）
     // ════════════════════════════════════════════
 
-    /// 在二值化图像中查找所有字库字符
-    /// binary: 二值化后的搜索区域
+    /// 在彩色图像中查找所有字库字符（每个字形用自己的颜色过滤器做binarize）
+    /// image: 彩色搜索区域（BGR/BGRA）
     /// sim: 相似度阈值（0.0~1.0）
-    std::vector<BflFindResult> findString(const cv::Mat &binary, double sim = 0.9) const;
+    std::vector<BflFindResult> findString(const cv::Mat &image, double sim = 0.9) const;
 
-    /// 在二值化图像中查找指定名称的字符
-    std::vector<BflFindResult> findChar(const std::string &charName, const cv::Mat &binary, double sim = 0.9) const;
+    /// 在彩色图像中查找指定名称的字符
+    std::vector<BflFindResult> findChar(const std::string &charName, const cv::Mat &image, double sim = 0.9) const;
+
+    /// 在已二值化图像中查找所有字库字符（旧接口，用外部binarize的结果）
+    std::vector<BflFindResult> findStringBinary(const cv::Mat &binary, double sim = 0.9) const;
+
+    /// 在已二值化图像中查找指定名称的字符（旧接口）
+    std::vector<BflFindResult> findCharBinary(const std::string &charName, const cv::Mat &binary, double sim = 0.9) const;
 
     // ════════════════════════════════════════════
     // 兼容旧API

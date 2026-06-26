@@ -596,7 +596,6 @@ void MainWindow::loginNextSlot()
     });
 
     slot->setState(GameSlot::Searching);
-    addActiveTask(m_currentLoginIdx, QString::fromUtf8("登录中"));
     ui->statuslabel->setText(QString::fromUtf8("窗口%1 登录中...").arg(m_currentLoginIdx + 1));
 
     loginThread->start();
@@ -620,8 +619,6 @@ void MainWindow::onLoginFinished(bool success)
                 settings.setValue(QString("Accounts/Slot%1/Hwnd").arg(idx), reinterpret_cast<qlonglong>(slot->hwnd()));
                 ui->textEdit->append(QString::fromUtf8("窗口%1 hwnd已保存 (0x%2)").arg(idx + 1).arg(reinterpret_cast<qlonglong>(slot->hwnd()), 0, 16));
             }
-            removeActiveTask(idx);
-            addActiveTask(idx, slot->taskName());
             if (m_statusLabels[idx]) { m_statusLabels[idx]->setText(QString::fromUtf8("\u5df2\u767b\u5f55")); m_statusLabels[idx]->setStyleSheet("color: #090;"); }
             refreshTaskPanel();
             ui->textEdit->append(QString::fromUtf8("窗口%1 登录成功，开始初始化...").arg(idx + 1));
@@ -629,7 +626,6 @@ void MainWindow::onLoginFinished(bool success)
             return;
         } else {
             slot->setState(GameSlot::Idle);
-            removeActiveTask(idx);
             ui->textEdit->append(QString::fromUtf8("窗口%1 登录失败").arg(idx + 1));
         }
     } else {
@@ -1241,8 +1237,11 @@ void MainWindow::startSingleTask(int slotIdx)
     auto *slot = mScheduler->slot(slotIdx);
     if (!slot || !slot->isLoggedIn()) return;
 
+    // unifiedTaskCombo: 0=副本, 1=主线任务, 2=冒险, 3=一条龙
+    // TaskType enum:   None=0, Dungeon=1, MainQuest=2, Adventure=3, YiTiaoLong=4
+    // 所以 combo index + 1 = TaskType
     GameSlot::TaskType taskType = (m_unifiedTaskCombo)
-        ? static_cast<GameSlot::TaskType>(m_unifiedTaskCombo->currentIndex())
+        ? static_cast<GameSlot::TaskType>(m_unifiedTaskCombo->currentIndex() + 1)
         : GameSlot::Dungeon;
 
     QString param;
@@ -1266,8 +1265,6 @@ void MainWindow::startSingleTask(int slotIdx)
         slot->setService(svc);
         svc->start();
     }
-
-    addActiveTask(slotIdx, slot->taskName());
 
     if (!mScheduler->running()) {
         mScheduler->start();

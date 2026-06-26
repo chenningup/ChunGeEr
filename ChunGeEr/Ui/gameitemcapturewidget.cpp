@@ -155,7 +155,8 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
 
     m_roiTypeCombo = new QComboBox(this);
     m_roiTypeCombo->addItems({
-        QString::fromUtf8("地图名"), QString::fromUtf8("等级"),
+        QString::fromUtf8("地图名"), QString::fromUtf8("地图坐标"),
+        QString::fromUtf8("等级"),
         QString::fromUtf8("技能"), QString::fromUtf8("主线任务"),
         QString::fromUtf8("掉线"), QString::fromUtf8("卡住"),
         QString::fromUtf8("设置区域")
@@ -316,7 +317,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         }
 
         if (!m_roiMode) return;
-        static const QStringList roiKeys = {"Location", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel"};
+        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel"};
         int idx = m_roiTypeCombo->currentIndex();
         if (idx < 0 || idx >= roiKeys.size()) return;
 

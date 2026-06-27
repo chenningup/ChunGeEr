@@ -65,6 +65,7 @@ void MainQuestService::startService()
     detectGameWindow();
     currentState = MainQuestState::ReadQuestTrack;
     retryCount = 0;
+    m_delivering = false;
     currentQuestType = QuestType::Unknown;
     m_hasPrevMap = false;
     m_elapsed.start();
@@ -570,14 +571,15 @@ QuestType MainQuestService::questTypeFromName(const QString &name) const
     // 对话任务
     static const QStringList talkQuests = {
         "主线拜见宁婉儿",
-        "主线熟悉药品"
-        // 后续对话任务在这里加
     };
     // 杀怪任务
     static const QStringList killQuests = {
-        // 杀怪任务名在这里加
         "主线熟悉武器",
         "主线打倒豪猪王",
+    };
+    // 熟悉药品
+    static const QStringList useItemQuests = {
+        "主线熟悉药品",
     };
 
     for (const auto &q : talkQuests) {
@@ -585,6 +587,9 @@ QuestType MainQuestService::questTypeFromName(const QString &name) const
     }
     for (const auto &q : killQuests) {
         if (name.contains(q)) return QuestType::Kill;
+    }
+    for (const auto &q : useItemQuests) {
+        if (name.contains(q)) return QuestType::UseItem;
     }
     return QuestType::Unknown;
 }
@@ -720,6 +725,8 @@ void MainQuestService::processState()
             questLog("任务类型:对话");
         } else if (currentQuestType == QuestType::Kill) {
             questLog("任务类型:杀怪");
+        } else if (currentQuestType == QuestType::UseItem) {
+            questLog("任务类型:熟悉药品");
         } else {
             questLog("任务类型:未知");
         }
@@ -811,7 +818,7 @@ void MainQuestService::processState()
         } else {
             // 任务已完成:找到任务名位置,点击其右侧30px寻路去找交付人
             questLog("任务已完成,寻找交付人");
-            currentQuestType = QuestType::Submit;
+            m_delivering = true;
 
             if (!results.empty()) {
                 for (const auto &r : results) {
@@ -859,14 +866,20 @@ void MainQuestService::processState()
 
             if (stableCount >= frameStableFrames) {
                 questLog("✅ 寻路到达(地图坐标稳定)");
-                transitionTo(MainQuestState::DetectTaskType);
+                if (m_delivering)
+                    transitionTo(MainQuestState::DialogSubmit);
+                else
+                    transitionTo(MainQuestState::DetectTaskType);
                 break;
             }
         }
 
         if (currentState == MainQuestState::WaitAutoPath) {
             questLog("⚠ 寻路超时,尝试检测当前状态");
-            transitionTo(MainQuestState::DetectTaskType);
+            if (m_delivering)
+                transitionTo(MainQuestState::DialogSubmit);
+            else
+                transitionTo(MainQuestState::DetectTaskType);
         }
         break;
     }
@@ -874,180 +887,149 @@ void MainQuestService::processState()
     // ── 判断任务类型并执行 ──
     case MainQuestState::DetectTaskType:
     {
-        questLog("▶ 判断任务类型");
-
-        if (currentQuestType == QuestType::Submit) {
-            questLog("交付任务,开始对话");
-            transitionTo(MainQuestState::DialogSubmit);
-        } else if (currentQuestType == QuestType::Kill) {
-            questLog("打怪任务,检测战斗状态");
-            transitionTo(MainQuestState::DoCombat);
-        } else {
-            questLog("对话任务");
-            transitionTo(MainQuestState::DoDialog);
+        if (currentQuestType == QuestType::UseItem) {
+            // ═══ 熟悉药品 ═══
+            questLog("▶ 熟悉药品");
+            // TODO: 具体操作流程待确认
+            QThread::msleep(1000);
+            transitionTo(MainQuestState::ReadQuestTrack);
         }
-        break;
-    }
+        else if (currentQuestType == QuestType::Kill) {
+            // ═══ 打怪任务 ═══
+            questLog("▶ 打怪任务");
 
-    // ── 对话任务 ──
-    case MainQuestState::DoDialog:
-    {
-        questLog("▶ 执行对话任务");
-
-        if (!isDialogOpen()) {
-            bool found = false;
-            for (int i = 0; i < 20; i++) {
-                QThread::msleep(500);
-                if (isDialogOpen()) { found = true; break; }
-            }
-            if (!found) {
-                questLog("⚠ 无对话框,可能已到达但NPC未交互");
-                QRect npcRoi = offsetROI(QRect(400, 300, 240, 200));
-                clickAt(npcRoi.center().x(), npcRoi.center().y());
-                QThread::msleep(1500);
-                if (!isDialogOpen()) {
-                    questLog("仍无对话框,回到任务追踪重试");
-                    transitionTo(MainQuestState::ReadQuestTrack);
-                    break;
-                }
-            }
-        }
-
-        QList<QRect> btns = findGoldButtons(dialogBtnRoi);
-        if (!btns.isEmpty()) {
-            clickCenter(btns.first());
-            questLog(QString("✅ 点击对话按钮 at (%1,%2)")
-                         .arg(btns.first().center().x())
-                         .arg(btns.first().center().y()));
-        } else {
-            QRect br = offsetROI(dialogBtnRoi);
-            int bx = br.x() + br.width() * 2 / 3;
-            int by = br.y() + br.height() / 2;
-            clickAt(bx, by);
-            questLog(QString("固定位对话 (%1,%2)").arg(bx).arg(by));
-        }
-
-        QThread::msleep(2000);
-        transitionTo(MainQuestState::CheckProgress);
-        break;
-    }
-
-    // ── 打怪任务 ──
-    case MainQuestState::DoCombat:
-    {
-        questLog("▶ 执行打怪任务");
-
-        // 1. 在对手头像ROI区域找怪物名字
-        QRect avatarRoi = offsetROI(targetAvatarRoi);
-        cv::Mat frame = screenToMat();
-        if (frame.empty()) {
-            questLog("截图失败,重试");
-            randSleep(1500, 2500);
-            break;
-        }
-
-        int ax = qBound(0, avatarRoi.x(), frame.cols - 1);
-        int ay = qBound(0, avatarRoi.y(), frame.rows - 1);
-        int aw = qMin(avatarRoi.width(),  frame.cols - ax);
-        int ah = qMin(avatarRoi.height(), frame.rows - ay);
-        if (aw <= 0 || ah <= 0) {
-            questLog("对手头像ROI无效,重试");
-            randSleep(1500, 2500);
-            break;
-        }
-        cv::Mat avatarCrop = frame(cv::Rect(ax, ay, aw, ah)).clone();
-
-        // 用字库在头像区域找怪物名字
-        QString targetName = monsterNameFromQuest(m_currentQuestName);
-        if (targetName.isEmpty()) {
-            questLog(QString("任务[%1]未配置怪物名,跳过").arg(m_currentQuestName));
-            transitionTo(MainQuestState::CheckProgress);
-            break;
-        }
-        bool foundTarget = false;
-
-        if (m_fontLoaded && !targetName.isEmpty()) {
-            if (BitmapFontLib::Instance().isEmpty()) {
-                questLog("字库为空,无法识别怪物名,请先训练怪物名字");
-                transitionTo(MainQuestState::CheckProgress);
+            QRect avatarRoi = offsetROI(targetAvatarRoi);
+            cv::Mat frame = screenToMat();
+            if (frame.empty()) {
+                questLog("截图失败,重试");
+                randSleep(1500, 2500);
                 break;
             }
-            auto results = BitmapFontLib::Instance().findString(avatarCrop, 0.85);
-            for (const auto &r : results) {
-                QString name = QString::fromStdString(r.charName);
-                if (name == targetName || targetName.contains(name)) {
-                    foundTarget = true;
-                    questLog(QString("找到目标: %1 sim=%2").arg(name).arg(r.similarity, 0, 'f', 2));
-                    break;
-                }
+
+            int ax = qBound(0, avatarRoi.x(), frame.cols - 1);
+            int ay = qBound(0, avatarRoi.y(), frame.rows - 1);
+            int aw = qMin(avatarRoi.width(),  frame.cols - ax);
+            int ah = qMin(avatarRoi.height(), frame.rows - ay);
+            if (aw <= 0 || ah <= 0) {
+                questLog("对手头像ROI无效,重试");
+                randSleep(1500, 2500);
+                break;
             }
-        }
+            cv::Mat avatarCrop = frame(cv::Rect(ax, ay, aw, ah)).clone();
 
-        if (!foundTarget) {
-            // 2. 没找到怪物名字 → 按Tab切换目标
-            questLog("未找到目标,按Tab切换");
-            MouseKeyboardManager::Instance().keyPress(KEY_TAB);
-            randSleep(50, 100);
-            MouseKeyboardManager::Instance().keyRelease(KEY_TAB);
-            randSleep(800, 1000);
-            break;
-        }
+            QString targetName = monsterNameFromQuest(m_currentQuestName);
+            if (targetName.isEmpty()) {
+                questLog(QString("任务[%1]未配置怪物名,返回重读").arg(m_currentQuestName));
+                transitionTo(MainQuestState::ReadQuestTrack);
+                break;
+            }
 
-        // 3. 找到目标 → 按1、2技能打怪
-        questLog("锁定目标,释放技能");
-        MouseKeyboardManager::Instance().clickButton('1');
-        randSleep(80, 100);
-        MouseKeyboardManager::Instance().clickButton('1');
-        randSleep(80, 100);
-        MouseKeyboardManager::Instance().clickButton('1');
-        randSleep(80, 100);
-
-        MouseKeyboardManager::Instance().clickButton('2');
-        randSleep(1800, 2500);
-
-        // 4. 名字消失 → 检测任务是否完成
-        // 重新截图检查目标是否还在
-        cv::Mat frame2 = screenToMat();
-        if (!frame2.empty()) {
-            cv::Mat avatarCrop2 = frame2(cv::Rect(ax, ay, aw, ah)).clone();
-            bool stillThere = false;
-            if (m_fontLoaded) {
-                auto results2 = BitmapFontLib::Instance().findString(avatarCrop2, 0.85);
-                for (const auto &r : results2) {
+            bool foundTarget = false;
+            if (m_fontLoaded && !BitmapFontLib::Instance().isEmpty()) {
+                auto results = BitmapFontLib::Instance().findString(avatarCrop, 0.85);
+                for (const auto &r : results) {
                     QString name = QString::fromStdString(r.charName);
                     if (name == targetName || targetName.contains(name)) {
-                        stillThere = true;
+                        foundTarget = true;
+                        questLog(QString("找到目标: %1 sim=%2").arg(name).arg(r.similarity, 0, 'f', 2));
                         break;
                     }
                 }
             }
-            if (!stillThere) {
-                questLog("目标消失,重读任务面板确认进度");
-                randSleep(1200, 2000);  // 等UI刷新
-                transitionTo(MainQuestState::ReadQuestTrack);
+
+            if (!foundTarget) {
+                questLog("未找到目标,按Tab切换");
+                MouseKeyboardManager::Instance().keyPress(KEY_TAB);
+                randSleep(50, 100);
+                MouseKeyboardManager::Instance().keyRelease(KEY_TAB);
+                randSleep(800, 1000);
                 break;
             }
+
+            // 找到目标 → 释放技能
+            questLog("锁定目标,释放技能");
+            MouseKeyboardManager::Instance().clickButton('1');
+            randSleep(50, 80);
+            MouseKeyboardManager::Instance().clickButton('1');
+            randSleep(50, 80);
+            MouseKeyboardManager::Instance().clickButton('1');
+            randSleep(50, 80);
+            MouseKeyboardManager::Instance().clickButton('2');
+            randSleep(1000, 1500);
+
+            // 目标消失 → 重读面板确认
+            cv::Mat frame2 = screenToMat();
+            if (!frame2.empty()) {
+                cv::Mat avatarCrop2 = frame2(cv::Rect(ax, ay, aw, ah)).clone();
+                bool stillThere = false;
+                if (m_fontLoaded && !BitmapFontLib::Instance().isEmpty()) {
+                    auto results2 = BitmapFontLib::Instance().findString(avatarCrop2, 0.85);
+                    for (const auto &r : results2) {
+                        QString name = QString::fromStdString(r.charName);
+                        if (name == targetName || targetName.contains(name)) {
+                            stillThere = true;
+                            break;
+                        }
+                    }
+                }
+                if (!stillThere) {
+                    questLog("目标消失,重读任务面板确认进度");
+                    randSleep(1200, 2000);
+                    transitionTo(MainQuestState::ReadQuestTrack);
+                    break;
+                }
+            }
+            questLog("目标仍在,继续打怪");
         }
+        else {
+            // ═══ 对话任务 ═══
+            questLog("▶ 对话任务");
 
-        // 目标还在，继续循环打怪
-        questLog("目标仍在,继续打怪");
-        break;
-    }
+            if (!isDialogOpen()) {
+                bool found = false;
+                for (int i = 0; i < 20; i++) {
+                    QThread::msleep(500);
+                    if (!toRun) return;
+                    if (isDialogOpen()) { found = true; break; }
+                }
+                if (!found) {
+                    questLog("⚠ 无对话框,尝试点击NPC");
+                    QRect npcRoi = offsetROI(QRect(400, 300, 240, 200));
+                    clickAt(npcRoi.center().x(), npcRoi.center().y());
+                    QThread::msleep(1500);
+                    if (!isDialogOpen()) {
+                        questLog("仍无对话框,回到任务追踪重试");
+                        transitionTo(MainQuestState::ReadQuestTrack);
+                        break;
+                    }
+                }
+            }
 
-    // ── 检查进度 ──
-    case MainQuestState::CheckProgress:
-    {
-        questLog("▶ 检查任务进度");
+            // 点击对话按钮
+            QList<QRect> btns = findGoldButtons(dialogBtnRoi);
+            if (!btns.isEmpty()) {
+                clickCenter(btns.first());
+                questLog(QString("✅ 点击对话按钮 at (%1,%2)")
+                             .arg(btns.first().center().x())
+                             .arg(btns.first().center().y()));
+            } else {
+                QRect br = offsetROI(dialogBtnRoi);
+                int bx = br.x() + br.width() * 2 / 3;
+                int by = br.y() + br.height() / 2;
+                clickAt(bx, by);
+                questLog(QString("固定位对话 (%1,%2)").arg(bx).arg(by));
+            }
 
-        if (isDialogOpen()) {
-            questLog("仍有对话框,继续对话");
-            transitionTo(MainQuestState::DoDialog);
-            break;
+            // 判断对话是否结束
+            QThread::msleep(2000);
+            if (isDialogOpen()) {
+                questLog("对话框仍在,继续对话");
+            } else {
+                questLog("对话框消失,回到任务追踪检查进度");
+                currentQuestType = QuestType::Unknown;
+            }
+            transitionTo(MainQuestState::ReadQuestTrack);
         }
-
-        QThread::msleep(2000);
-        currentQuestType = QuestType::Unknown;
-        transitionTo(MainQuestState::ReadQuestTrack);
         break;
     }
 
@@ -1163,6 +1145,7 @@ void MainQuestService::processState()
         questLog("✅ 任务步骤完成,3秒后继续下一个");
         QThread::msleep(3000);
         currentQuestType = QuestType::Unknown;
+        m_delivering = false;
         m_hasPrevMap = false;
         transitionTo(MainQuestState::ReadQuestTrack);
         break;

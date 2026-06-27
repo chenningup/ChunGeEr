@@ -7,30 +7,23 @@
 #include <QElapsedTimer>
 
 // ═══════════════════════════════════════════════════════════════
-// 主线任务状态机（v2）
-//
-// 不打开任务面板 — 直接在画面右侧任务追踪区域识别文字
-// 跑路检测 — 只对比地图坐标区域帧差
+// 主线任务状态机（v3）
 //
 // 流程:
-//   ReadQuestTrack → 识别任务追踪面板文字
-//     ├── 有坐标链接 → 点击寻路 → WaitAutoPath(地图坐标帧差)
-//     │     → 到达 → 判断类型(对话/打怪)
-//     │           → 对话: DoDialog
-//     │           → 打怪: DoCombat
-//     │           → 完成后 CheckProgress → 循环
-//     └── 已完成(无坐标/有交付提示) → 点击交付 → DialogSubmit → 循环
+//   ReadQuestTrack → 识别任务追踪面板文字 → 点击寻路
+//     → WaitAutoPath(地图坐标帧差) → DetectTaskType
+//         ├── 对话: 检测对话框→点对话按钮(循环直到对话结束)
+//         └── 打怪: 字库找目标→Tab切目标→技能打怪(循环直到目标消失)
+//     → ReadQuestTrack(检查进度)
+//         ├── 未完成 → 继续循环
+//         └── 已完成 → WaitAutoPath → DialogSubmit → Done
 // ═══════════════════════════════════════════════════════════════
 
 enum class MainQuestState {
     Idle,
     ReadQuestTrack,     // 读取画面右侧任务追踪面板
-    ClickCoordLink,     // 点击任务描述中的坐标链接寻路
     WaitAutoPath,       // 地图坐标区域帧差检测等待到达
-    DetectTaskType,     // 到达后判断是对话还是打怪
-    DoDialog,           // 对话任务：检测对话框→点对话按钮
-    DoCombat,           // 打怪任务：等待击杀完成
-    CheckProgress,      // 检查任务进度
+    DetectTaskType,     // 做任务：区分对话/打怪，循环执行直到完成
     DialogSubmit,       // 已完成→对话交付
     Done,               // 完成，循环
 };
@@ -39,7 +32,7 @@ enum class QuestType {
     Unknown,
     Talk,       // 对话任务
     Kill,       // 杀怪任务
-    Submit,     // 交付任务（已完成待交）
+    UseItem,    // 熟悉药品
 };
 
 class MainQuestService : public BaseService
@@ -134,6 +127,7 @@ private:
     // 帧差用（只存地图坐标区域）
     cv::Mat m_prevMapCoord;
     bool    m_hasPrevMap = false;
+    bool    m_delivering = false;  // 当前处于交付寻路中
     QElapsedTimer m_elapsed;
 
     // 模板缓存

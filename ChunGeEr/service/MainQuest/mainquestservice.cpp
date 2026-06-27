@@ -799,14 +799,18 @@ void MainQuestService::processState()
             currentQuestType = QuestType::Submit;
 
             if (!results.empty()) {
-                const auto &firstMatch = results[0];
-                int clickX = rx + firstMatch.x + firstMatch.width + 30;
-                int clickY = ry + firstMatch.y + firstMatch.height / 2;
-                questLog(QString("点击任务名右侧30px寻路交付: (%1,%2)").arg(clickX).arg(clickY));
-                clickAt(clickX, clickY);
-                m_hasPrevMap = false;
-                m_elapsed.restart();
-                transitionTo(MainQuestState::WaitAutoPath);
+                for (const auto &r : results) {
+                    if (QString::fromStdString(r.charName) == QStringLiteral("交付人")) {
+                        int clickX = rx + r.x + r.width + 30;
+                        int clickY = ry + r.y + r.height / 2;
+                        questLog(QString("点击交付人右侧30px寻路交付: (%1,%2)").arg(clickX).arg(clickY));
+                        clickAt(clickX, clickY);
+                        m_hasPrevMap = false;
+                        m_elapsed.restart();
+                        transitionTo(MainQuestState::WaitAutoPath);
+                        break;
+                    }
+                }
             } else {
                 questLog("未识别到任务名,无法寻路");
                 QThread::msleep(2000);
@@ -1086,7 +1090,14 @@ void MainQuestService::processState()
             QString btnImage;
             if (m_currentQuestName.contains("拜见宁婉儿"))
             {
-                btnImage = "popups/拜见小师姑.png";
+                if(dialogRounds == 1)
+                {
+                    btnImage = "popups/拜见小师姑.png";
+                }
+                else
+                {
+                    btnImage = "popups/对话.png";
+                }
             }
             else
             {

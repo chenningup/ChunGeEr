@@ -1487,7 +1487,8 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
         return;
     }
 
-    // 确认: 把临时颜色追加到全局过滤器（而非替换，保留之前训练的颜色）
+    // 确认: 清空旧颜色，只保留本次训练的临时颜色
+    lib.colorFilterRef().clear();
     for (const auto &pt : tempFilter.points) {
         lib.colorFilterRef().add(pt.color, pt.bias);
     }

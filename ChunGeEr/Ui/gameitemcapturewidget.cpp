@@ -160,7 +160,8 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         QString::fromUtf8("等级"),
         QString::fromUtf8("技能"), QString::fromUtf8("主线任务"),
         QString::fromUtf8("掉线"), QString::fromUtf8("卡住"),
-        QString::fromUtf8("设置区域"), QString::fromUtf8("对手头像")
+        QString::fromUtf8("设置区域"), QString::fromUtf8("对手头像"),
+        QString::fromUtf8("任务对话区域")
     });
     m_roiTypeCombo->setMinimumWidth(90);
     m_roiTypeCombo->setVisible(false);
@@ -331,7 +332,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         }
 
         if (!m_roiMode) return;
-        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar"};
+        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar", "DialogBtn"};
         int idx = m_roiTypeCombo->currentIndex();
         if (idx < 0 || idx >= roiKeys.size()) return;
 
@@ -948,7 +949,7 @@ void GameItemCaptureWidget::loadRoiForCurrentSelection()
     }
 
     int idx = m_roiTypeCombo->currentIndex();
-    static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar"};
+    static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar", "DialogBtn"};
     if (idx < 0 || idx >= roiKeys.size()) {
         m_roiModifyBtn->setVisible(false);
         return;

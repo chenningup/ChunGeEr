@@ -89,6 +89,7 @@ private:
     void   questLog(const QString &msg);
     void   detectGameWindow();
     QRect  offsetROI(const QRect &r) const;
+    void   randSleep(int minMs, int maxMs);  // 随机延时，防检测
 
     MainQuestState currentState = MainQuestState::Idle;
     QuestType currentQuestType = QuestType::Unknown;

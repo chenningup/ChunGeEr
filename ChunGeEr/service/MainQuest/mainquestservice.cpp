@@ -3,6 +3,7 @@
 #include "../../signalslotconnector.h"
 #include "XuLog.h"
 #include <QThread>
+#include <QRandomGenerator>
 #include <QSettings>
 #include <QCoreApplication>
 #include <windows.h>
@@ -39,10 +40,16 @@ void MainQuestService::startService()
         if (parts.size() == 4)
             targetAvatarRoi = QRect(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
     }
-    questLog(QString("任务追踪ROI: (%1,%2,%3,%4) 地图坐标ROI: (%5,%6,%7,%8) 对手头像ROI: (%9,%10,%11,%12)")
+    if (s.contains("ROIs/DialogBtn")) {
+        QStringList parts = s.value("ROIs/DialogBtn").toString().split(',');
+        if (parts.size() == 4)
+            dialogBtnRoi = QRect(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
+    }
+    questLog(QString("任务追踪ROI: (%1,%2,%3,%4) 地图坐标ROI: (%5,%6,%7,%8) 对手头像ROI: (%9,%10,%11,%12) 对话按钮ROI: (%13,%14,%15,%16)")
                  .arg(questTrackRoi.x()).arg(questTrackRoi.y()).arg(questTrackRoi.width()).arg(questTrackRoi.height())
                  .arg(mapCoordRoi.x()).arg(mapCoordRoi.y()).arg(mapCoordRoi.width()).arg(mapCoordRoi.height())
-                 .arg(targetAvatarRoi.x()).arg(targetAvatarRoi.y()).arg(targetAvatarRoi.width()).arg(targetAvatarRoi.height()));
+                 .arg(targetAvatarRoi.x()).arg(targetAvatarRoi.y()).arg(targetAvatarRoi.width()).arg(targetAvatarRoi.height())
+                 .arg(dialogBtnRoi.x()).arg(dialogBtnRoi.y()).arg(dialogBtnRoi.width()).arg(dialogBtnRoi.height()));
 
     // 加载字库
     m_fontPath = QCoreApplication::applicationDirPath() + "/datang_font.bfl";
@@ -441,6 +448,12 @@ void MainQuestService::questLog(const QString &msg)
     emit SignalSlotConnector::Instance().log(log);
 }
 
+void MainQuestService::randSleep(int minMs, int maxMs)
+{
+    int ms = minMs + QRandomGenerator::global()->bounded(maxMs - minMs + 1);
+    QThread::msleep(ms);
+}
+
 QRect MainQuestService::findTemplate(const QString &name, double threshold)
 {
     cv::Mat screen = screenToMat();
@@ -717,36 +730,58 @@ void MainQuestService::processState()
             incompleteClickX = rx + incompleteMatch.x - 20;
             incompleteClickY = ry + incompleteMatch.y + incompleteMatch.height / 2;
         } else {
-            // 没找到"未完成"，检测红色进度数字(如 0/5)
-            // HSV红色范围: H 0~10 或 170~180, S>100, V>100
-            cv::Mat hsv;
-            cv::cvtColor(crop, hsv, cv::COLOR_BGR2HSV);
-            cv::Mat redMask1, redMask2, redMask;
-            cv::inRange(hsv, cv::Scalar(0, 100, 100), cv::Scalar(10, 255, 255), redMask1);
-            cv::inRange(hsv, cv::Scalar(170, 100, 100), cv::Scalar(180, 255, 255), redMask2);
-            cv::bitwise_or(redMask1, redMask2, redMask);
+            // 没找到"未完成"，查"打倒"右边150×30区域检测红色进度数字
+            bool foundDadao = false;
+            BflFindResult dadaoMatch;
+            for (const auto &r : results) {
+                if (QString::fromStdString(r.charName) == QStringLiteral("打倒")) {
+                    dadaoMatch = r;
+                    foundDadao = true;
+                    break;
+                }
+            }
 
-            int redPixels = cv::countNonZero(redMask);
-            questLog(QString("红色像素检测: %1 个").arg(redPixels));
+            if (foundDadao) {
+                // "打倒"右侧紧邻150×30区域
+                int redX = rx + dadaoMatch.x + dadaoMatch.width;
+                int redY = ry + dadaoMatch.y;
+                int redW = qMin(150, crop.cols - (dadaoMatch.x + dadaoMatch.width));
+                int redH = dadaoMatch.height;
 
-            if (redPixels > 20) {
-                // 有红色进度数字 → 任务进行中
-                questIncomplete = true;
-                // 找红色区域中心点击寻路
-                // cv::Moments m = cv::moments(redMask, true);
-                // if (m.m00 > 0) {
-                //     incompleteClickX = rx + (int)(m.m10 / m.m00) - 20;
-                //     incompleteClickY = ry + (int)(m.m01 / m.m00);
-                // } else {
-                //     incompleteClickX = rx + rw / 2 - 20;
-                //     incompleteClickY = ry + rh / 2;
-                // }
-                for (const auto &r : results)
-                {
-                    if (QString::fromStdString(r.charName) == QStringLiteral("打倒"))
-                    {
-                        incompleteClickX = rx + r.x + r.width + 30;
-                        incompleteClickY = ry + r.y +  r.height / 2;;
+                if (redW > 0 && redH > 0) {
+                    cv::Rect redRoi(dadaoMatch.x + dadaoMatch.width, dadaoMatch.y, redW, redH);
+                    cv::Mat redCrop = crop(redRoi);
+
+                    cv::Mat hsv;
+                    cv::cvtColor(redCrop, hsv, cv::COLOR_BGR2HSV);
+                    cv::Mat redMask1, redMask2, redMask;
+                    cv::inRange(hsv, cv::Scalar(0, 100, 100), cv::Scalar(10, 255, 255), redMask1);
+                    cv::inRange(hsv, cv::Scalar(170, 100, 100), cv::Scalar(180, 255, 255), redMask2);
+                    cv::bitwise_or(redMask1, redMask2, redMask);
+
+                    int redPixels = cv::countNonZero(redMask);
+                    questLog(QString("红色进度检测(打倒右侧%1×%2): %3 个")
+                                 .arg(redW).arg(redH).arg(redPixels));
+
+                    // DEBUG
+                    static int redDbg = 0;
+                    if (redDbg < 5) {
+                        cv::imwrite("debug_redpixel_" + std::to_string(redDbg) + ".png", redCrop);
+                        questLog(QString("保存红色检测截图: debug_redpixel_%1.png (%2×%3)")
+                                     .arg(redDbg).arg(redW).arg(redH));
+                        redDbg++;
+                    }
+
+                    if (redPixels > 20) {
+                        questIncomplete = true;
+                        cv::Moments m = cv::moments(redMask, true);
+                        if (m.m00 > 0) {
+                            incompleteClickX = redX + (int)(m.m10 / m.m00) - 20;
+                            incompleteClickY = redY + (int)(m.m01 / m.m00);
+                        } else {
+                            incompleteClickX = redX + redW / 2 - 20;
+                            incompleteClickY = redY + redH / 2;
+                        }
                     }
                 }
             }
@@ -888,7 +923,7 @@ void MainQuestService::processState()
         cv::Mat frame = screenToMat();
         if (frame.empty()) {
             questLog("截图失败,重试");
-            QThread::msleep(2000);
+            randSleep(1500, 2500);
             break;
         }
 
@@ -898,7 +933,7 @@ void MainQuestService::processState()
         int ah = qMin(avatarRoi.height(), frame.rows - ay);
         if (aw <= 0 || ah <= 0) {
             questLog("对手头像ROI无效,重试");
-            QThread::msleep(2000);
+            randSleep(1500, 2500);
             break;
         }
         cv::Mat avatarCrop = frame(cv::Rect(ax, ay, aw, ah)).clone();
@@ -933,25 +968,23 @@ void MainQuestService::processState()
             // 2. 没找到怪物名字 → 按Tab切换目标
             questLog("未找到目标,按Tab切换");
             MouseKeyboardManager::Instance().keyPress(KEY_TAB);
-            QThread::msleep(100);
+            randSleep(50, 100);
             MouseKeyboardManager::Instance().keyRelease(KEY_TAB);
-            QThread::msleep(1000);
+            randSleep(800, 1000);
             break;
         }
 
         // 3. 找到目标 → 按1、2技能打怪
         questLog("锁定目标,释放技能");
-        // USB HID: 1=0x1E, 2=0x1F
-        MouseKeyboardManager::Instance().clickButton('1');  // 按键1
-        QThread::msleep(150);
-        MouseKeyboardManager::Instance().clickButton('1');  // 按键1
-        QThread::msleep(150);
-        MouseKeyboardManager::Instance().clickButton('1');  // 按键1
-        QThread::msleep(150);
-
+        MouseKeyboardManager::Instance().clickButton('1');
+        randSleep(80, 150);
+        MouseKeyboardManager::Instance().clickButton('1');
+        randSleep(80, 150);
+        MouseKeyboardManager::Instance().clickButton('1');
+        randSleep(80, 150);
 
         MouseKeyboardManager::Instance().clickButton('2');
-        QThread::msleep(2000);
+        randSleep(1800, 2500);
 
         // 4. 名字消失 → 检测任务是否完成
         // 重新截图检查目标是否还在
@@ -970,8 +1003,9 @@ void MainQuestService::processState()
                 }
             }
             if (!stillThere) {
-                questLog("目标消失,检查任务进度");
-                transitionTo(MainQuestState::CheckProgress);
+                questLog("目标消失,重读任务面板确认进度");
+                randSleep(1200, 2000);  // 等UI刷新
+                transitionTo(MainQuestState::ReadQuestTrack);
                 break;
             }
         }
@@ -1043,15 +1077,20 @@ void MainQuestService::processState()
 
             // 在取消按钮上方区域找对话按钮
             // 取消按钮中心向上偏移区域作为搜索范围
-            int searchTop = qMax(0, cancelRect.y() - 400);
+            int searchTop = qMax(0, cancelRect.y() - 800);
             int searchHeight = cancelRect.y() - searchTop;
             QRect searchArea(cancelRect.x() - 50, searchTop,
                              cancelRect.width() + 100, searchHeight);
 
             // 按任务名找对应按钮图
             QString btnImage;
-            if (m_currentQuestName.contains("拜见宁婉儿")) {
+            if (m_currentQuestName.contains("拜见宁婉儿"))
+            {
                 btnImage = "popups/拜见小师姑.png";
+            }
+            else
+            {
+                btnImage = "popups/对话.png";
             }
             // 后续任务按钮图在这里加 elif
 
@@ -1065,27 +1104,28 @@ void MainQuestService::processState()
                                  .arg(btnRect.center().x())
                                  .arg(btnRect.center().y()));
                     clickCenter(btnRect);
+                    randSleep(500, 1000);
+                    MouseKeyboardManager::Instance().mouseMoveDirect(btnRect.center().x() + 100, btnRect.center().y() +  100);
                     clicked = true;
                 }
             }
 
             // fallback: 金色按钮
-            if (!clicked) {
-                QList<QRect> btns = findGoldButtons(dialogBtnRoi);
-                if (!btns.isEmpty()) {
-                    clickCenter(btns.first());
-                    questLog("✅ fallback金色按钮点击");
-                    clicked = true;
-                }
-            }
+            // if (!clicked) {
+            //     QList<QRect> btns = findGoldButtons(dialogBtnRoi);
+            //     if (!btns.isEmpty()) {
+            //         clickCenter(btns.first());
+            //         questLog("✅ fallback金色按钮点击");
+            //         clicked = true;
+            //     }
+            // }
 
-            if (!clicked) {
-                questLog("⚠ 未找到对话按钮，点取消按钮上方区域");
-                // 点搜索区域中心
-                clickAt(searchArea.center().x(), searchArea.center().y());
-            }
-
-            QThread::msleep(2000);
+            // if (!clicked) {
+            //     questLog("⚠ 未找到对话按钮，点取消按钮上方区域");
+            //     // 点搜索区域中心
+            //     clickAt(searchArea.center().x(), searchArea.center().y());
+            // }
+            randSleep(1200, 2000);
         }
 
         transitionTo(MainQuestState::Done);

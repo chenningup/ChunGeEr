@@ -415,6 +415,14 @@ void MainQuestService::clickAt(int sx, int sy)
     QThread::msleep(50);
     MouseKeyboardManager::Instance().mouseClick();
     questLog(QString("点击(%1,%2)").arg(sx).arg(sy));
+
+    // 点击后随机延时1~2秒，再随机移开100~200px
+    randSleep(1000, 2000);
+    int dx = 100 + (rand() % 101);
+    int dy = 100 + (rand() % 101);
+    if (rand() & 1) dx = -dx;
+    if (rand() & 1) dy = -dy;
+    MouseKeyboardManager::Instance().mouseMoveDirect(sx + dx, sy + dy);
 }
 
 void MainQuestService::clickCenter(const QRect &r)
@@ -562,12 +570,14 @@ QuestType MainQuestService::questTypeFromName(const QString &name) const
     // 对话任务
     static const QStringList talkQuests = {
         "主线拜见宁婉儿",
+        "主线熟悉药品"
         // 后续对话任务在这里加
     };
     // 杀怪任务
     static const QStringList killQuests = {
         // 杀怪任务名在这里加
         "主线熟悉武器",
+        "主线打倒豪猪王",
     };
 
     for (const auto &q : talkQuests) {
@@ -584,6 +594,7 @@ QString MainQuestService::monsterNameFromQuest(const QString &questName) const
     // 任务名 → 怪物名 映射表
     static const QHash<QString, QString> monsterMap = {
         {"主线熟悉武器", "豪猪"},
+        {"主线打倒豪猪王", "豪猪王"},
         // 后续杀怪任务在这里加：
         // {"任务名", "怪物名"},
     };
@@ -681,18 +692,22 @@ void MainQuestService::processState()
 
         auto results = BitmapFontLib::Instance().findString(crop, 0.85);
 
-        // 拼接识别到的所有文字
+        // 拼接识别到的所有文字，选出置信度最高的主线任务
         QString allText;
         QString mainTask;
+        double mainTaskSim = 0.0;
         for (const auto &r : results)
         {
-            if(QString::fromStdString(r.charName).contains("主线"))
-            {
-                mainTask = QString::fromStdString(r.charName);
-            }
             allText += QString::fromStdString(r.charName);
+            if (QString::fromStdString(r.charName).contains("主线")) {
+                if (r.similarity > mainTaskSim) {
+                    mainTaskSim = r.similarity;
+                    mainTask = QString::fromStdString(r.charName);
+                }
+            }
         }
-        questLog(QString("识别结果: %1 (匹配%2个)").arg(allText).arg(results.size()));
+        questLog(QString("识别结果: %1 (匹配%2个) | 主线: %3(%.2f)")
+                     .arg(allText).arg(results.size()).arg(mainTask).arg(mainTaskSim));
 
 
 
@@ -981,11 +996,11 @@ void MainQuestService::processState()
         // 3. 找到目标 → 按1、2技能打怪
         questLog("锁定目标,释放技能");
         MouseKeyboardManager::Instance().clickButton('1');
-        randSleep(80, 150);
+        randSleep(80, 100);
         MouseKeyboardManager::Instance().clickButton('1');
-        randSleep(80, 150);
+        randSleep(80, 100);
         MouseKeyboardManager::Instance().clickButton('1');
-        randSleep(80, 150);
+        randSleep(80, 100);
 
         MouseKeyboardManager::Instance().clickButton('2');
         randSleep(1800, 2500);
@@ -1116,7 +1131,6 @@ void MainQuestService::processState()
                                  .arg(btnRect.center().y()));
                     clickCenter(btnRect);
                     randSleep(500, 1000);
-                    MouseKeyboardManager::Instance().mouseMoveDirect(btnRect.center().x() + 100, btnRect.center().y() +  100);
                     clicked = true;
                 }
             }

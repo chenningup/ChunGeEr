@@ -1067,6 +1067,18 @@ void GameItemCaptureWidget::onFontLibSave()
     if (lib.save(path)) {
         m_bflPath = path;
         updateBflStatus();
+
+        // 同时拷贝到源码目录（防止Release编译时被CMake全覆盖）
+        QString srcDir = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../..");
+        QString srcPath = srcDir + "/datang_font.bfl";
+        if (QFile::copy(path, srcPath)) {
+            qDebug() << "[BFL] 已拷贝到源码目录:" << srcPath;
+        } else {
+            // 目标已存在则覆盖
+            QFile::remove(srcPath);
+            QFile::copy(path, srcPath);
+            qDebug() << "[BFL] 已覆盖源码目录:" << srcPath;
+        }
     }
 }
 

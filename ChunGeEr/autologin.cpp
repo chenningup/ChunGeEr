@@ -720,13 +720,17 @@ void AutoLogin::processState()
         }
 
         if (m_charCreateStep == 1) {
-            auto r3 = gu.bestMatch(frame, dir, "\u5c55\u5f00\u7684\u6d3b\u52a8");
-            loginLog(QString("展开的活动 conf=%1 at=(%2,%3)")
-                .arg(r3.confidence, 0, 'f', 3).arg(r3.centerX).arg(r3.centerY));
-            if (r3.confidence > 0.80) {
-                loginLog("→ 关闭");
-                humanClick(r3.centerX, r3.centerY);
-                QThread::msleep(1000);
+            int index = 0;
+            while(index < 3){
+                auto r3 = gu.bestMatch(frame, dir, "\u5c55\u5f00\u7684\u6d3b\u52a8");
+                loginLog(QString("展开的活动 conf=%1 at=(%2,%3)")
+                             .arg(r3.confidence, 0, 'f', 3).arg(r3.centerX).arg(r3.centerY));
+                if (r3.confidence > 0.80) {
+                    loginLog("→ 关闭");
+                    humanClick(r3.centerX, r3.centerY);
+                    QThread::msleep(1000);
+                }
+                index++;
             }
             loginLog("弹窗处理完毕");
             transitionTo(LoginPhase::OpenSettings);

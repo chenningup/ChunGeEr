@@ -366,15 +366,23 @@ bool BitmapFontLib::load(const QString &path)
             // 6字段：解析字形独立颜色
             if (parts.size() >= 6) {
                 // 格式: R,G,B|r,b,g|R,G,B|r,b,g|...
-                QStringList colorEntries = parts[5].split('|');
-                for (const QString &ce : colorEntries) {
-                    QStringList cv = ce.split(',');
-                    if (cv.size() >= 6) {
-                        BflColorPoint pt;
-                        pt.color = QColor(cv[0].toInt(), cv[1].toInt(), cv[2].toInt());
-                        pt.bias = QColor(cv[3].toInt(), cv[4].toInt(), cv[5].toInt());
-                        g.colorFilter.points.append(pt);
+                // 鏍煎紡: R,G,B,biasR,biasG,biasB,R,G,B,biasR,biasG,biasB,...
+                // 鍏煎 silde format: R,G,B|biasR,biasG,biasB|R,G,B|biasR,biasG,biasB
+                QStringList nums;
+                if (parts[5].contains('|')) {
+                    // 鏃ф牸寮? 鐢?| 鍒嗛殧锛屾娊鍑烘墍鏈夋暟瀛?
+                    QStringList entries = parts[5].split('|');
+                    for (const QString &e : entries) {
+                        nums << e.split(',');
                     }
+                } else {
+                    nums = parts[5].split(',');
+                }
+                for (int ci = 0; ci + 5 < nums.size(); ci += 6) {
+                    BflColorPoint pt;
+                    pt.color = QColor(nums[ci].toInt(), nums[ci+1].toInt(), nums[ci+2].toInt());
+                    pt.bias = QColor(nums[ci+3].toInt(), nums[ci+4].toInt(), nums[ci+5].toInt());
+                    g.colorFilter.points.append(pt);
                 }
             }
         } else {
@@ -428,7 +436,7 @@ bool BitmapFontLib::save(const QString &path) const
             if (!g.colorFilter.points.isEmpty()) {
                 QStringList colorStrs;
                 for (const auto &pt : g.colorFilter.points) {
-                    colorStrs.append(QString("%1,%2,%3|%4,%5,%6")
+                    colorStrs.append(QString("%1,%2,%3,%4,%5,%6")
                         .arg(pt.color.red()).arg(pt.color.green()).arg(pt.color.blue())
                         .arg(pt.bias.red()).arg(pt.bias.green()).arg(pt.bias.blue()));
                 }
@@ -512,15 +520,36 @@ std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &image, doubl
 
     int imgW = image.cols, imgH = image.rows;
 
+    infof("[BFL] findString: image {}x{}, glyphs={}", imgW, imgH, m_glyphs.size());
     for (auto it = m_glyphs.begin(); it != m_glyphs.end(); ++it) {
         const std::string &charName = it.key().toStdString();
         for (const BflGlyph &g : it.value()) {
-            if (g.width > imgW || g.height > imgH) continue;
+            infof("[BFL]  glyph: name={} w={} h={} hexLen={} colorPoints={}",
+                  charName, g.width, g.height, g.hexBits.size(), g.colorFilter.points.size());
+            if (g.width > imgW || g.height > imgH) {
+                infof("[BFL]   skip: glyph {}x{} > image {}x{}", g.width, g.height, imgW, imgH);
+                continue;
+            }
 
             // 用字形独立颜色binarize；没有则用全局
             const BflColorFilter &cf = g.colorFilter.isEmpty() ? m_colorFilter : g.colorFilter;
+            infof("[BFL]   cf points={} (global={})", cf.points.size(), g.colorFilter.isEmpty());
             cv::Mat binary = binarizeWith(image, cf);
-            if (binary.empty()) continue;
+            if (binary.empty()) {
+                infof("[BFL]   binarize returned empty!");
+                continue;
+            }
+            int nonZero = cv::countNonZero(binary);
+            infof("[BFL]   binarize ok: nonZero={}/{}", nonZero, binary.total());
+            // 调试：保存原图和二值化图
+            static int dbgIdx = 0;
+            if (dbgIdx < 5) {
+                std::string prefix = "debug_bfl_" + std::to_string(dbgIdx);
+                cv::imwrite(prefix + "_orig.png", image);
+                cv::imwrite(prefix + "_binary.png", binary);
+                infof("[BFL]   saved debug images: {}_orig.png, {}_binary.png", prefix, prefix);
+                dbgIdx++;
+            }
 
             int maxX = imgW - g.width;
             int maxY = imgH - g.height;
@@ -546,7 +575,31 @@ std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &image, doubl
         }
     }
 
-    return results;
+    // NMS: 同一字形的重叠匹配（IoU > 0.5）只保留最高分
+    std::sort(results.begin(), results.end(),
+        [](const BflFindResult &a, const BflFindResult &b) { return a.similarity > b.similarity; });
+    std::vector<BflFindResult> nms;
+    std::vector<bool> suppressed(results.size(), false);
+    for (size_t i = 0; i < results.size(); i++) {
+        if (suppressed[i]) continue;
+        nms.push_back(results[i]);
+        for (size_t j = i + 1; j < results.size(); j++) {
+            if (suppressed[j]) continue;
+            if (results[i].charName != results[j].charName) continue;
+            // 计算IoU
+            int x1 = std::max(results[i].x, results[j].x);
+            int y1 = std::max(results[i].y, results[j].y);
+            int x2 = std::min(results[i].x + results[i].width, results[j].x + results[j].width);
+            int y2 = std::min(results[i].y + results[i].height, results[j].y + results[j].height);
+            if (x2 <= x1 || y2 <= y1) continue;
+            int intersect = (x2 - x1) * (y2 - y1);
+            int areaI = results[i].width * results[i].height;
+            int areaJ = results[j].width * results[j].height;
+            double iou = (double)intersect / (areaI + areaJ - intersect);
+            if (iou > 0.5) suppressed[j] = true;
+        }
+    }
+    return nms;
 }
 
 std::vector<BflFindResult> BitmapFontLib::findChar(const std::string &charName, const cv::Mat &image, double sim) const

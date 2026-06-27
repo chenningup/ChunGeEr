@@ -17,11 +17,11 @@ void MainQuestService::startService()
     // 从 config.ini 加载 ROI
     QString iniPath = QCoreApplication::applicationDirPath() + "/config.ini";
     QSettings s(iniPath, QSettings::IniFormat);
-    if (s.contains("ROIs/MainQuest")) {
-        QStringList parts = s.value("ROIs/MainQuest").toString().split(',');
-        if (parts.size() == 4)
-            questTrackRoi = QRect(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
-    }
+    // if (s.contains("ROIs/MainQuest")) {
+    //     QStringList parts = s.value("ROIs/MainQuest").toString().split(',');
+    //     if (parts.size() == 4)
+    //         questTrackRoi = QRect(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
+    // }
     if (s.contains("ROIs/MainQuest")) {
         QStringList parts = s.value("ROIs/MainQuest").toString().split(',');
         if (parts.size() == 4)
@@ -53,7 +53,8 @@ void MainQuestService::startService()
     currentQuestType = QuestType::Unknown;
     m_hasPrevMap = false;
     m_elapsed.start();
-    start();
+    // 注意: 不在这里调 start()，由外部 mainwindow 调 svc->start() 启动线程
+    // run() 也不调 startService()，避免重复调用
 }
 
 void MainQuestService::stopService()
@@ -119,6 +120,14 @@ QList<QRect> MainQuestService::findBlueHighlights(const QRect &roi)
     if (w <= 0 || h <= 0) return results;
 
     cv::Mat crop = screen(cv::Rect(x, y, w, h)).clone();
+
+    // 调试：保存ROI截图
+    static int dbgSave = 0;
+    if (dbgSave < 3) {
+        cv::imwrite("debug_quest_roi_" + std::to_string(dbgSave) + ".png", crop);
+        questLog(QString("保存调试ROI截图: debug_quest_roi_%1.png").arg(dbgSave));
+        dbgSave++;
+    }
     cv::Mat hsv;
     cv::cvtColor(crop, hsv, cv::COLOR_BGR2HSV);
 
@@ -161,6 +170,14 @@ QList<QRect> MainQuestService::findCoordinateLinks(const QRect &roi)
     if (w <= 0 || h <= 0) return results;
 
     cv::Mat crop = screen(cv::Rect(x, y, w, h)).clone();
+
+    // 调试：保存ROI截图
+    static int dbgSave = 0;
+    if (dbgSave < 3) {
+        cv::imwrite("debug_quest_roi_" + std::to_string(dbgSave) + ".png", crop);
+        questLog(QString("保存调试ROI截图: debug_quest_roi_%1.png").arg(dbgSave));
+        dbgSave++;
+    }
     cv::Mat hsv;
     cv::cvtColor(crop, hsv, cv::COLOR_BGR2HSV);
 
@@ -204,6 +221,14 @@ QList<QRect> MainQuestService::findGoldButtons(const QRect &roi)
     if (w <= 0 || h <= 0) return results;
 
     cv::Mat crop = screen(cv::Rect(x, y, w, h)).clone();
+
+    // 调试：保存ROI截图
+    static int dbgSave = 0;
+    if (dbgSave < 3) {
+        cv::imwrite("debug_quest_roi_" + std::to_string(dbgSave) + ".png", crop);
+        questLog(QString("保存调试ROI截图: debug_quest_roi_%1.png").arg(dbgSave));
+        dbgSave++;
+    }
     cv::Mat hsv;
     cv::cvtColor(crop, hsv, cv::COLOR_BGR2HSV);
 
@@ -276,6 +301,14 @@ bool MainQuestService::isInCombat()
     if (w <= 0 || h <= 0) return false;
 
     cv::Mat crop = screen(cv::Rect(x, y, w, h)).clone();
+
+    // 调试：保存ROI截图
+    static int dbgSave = 0;
+    if (dbgSave < 3) {
+        cv::imwrite("debug_quest_roi_" + std::to_string(dbgSave) + ".png", crop);
+        questLog(QString("保存调试ROI截图: debug_quest_roi_%1.png").arg(dbgSave));
+        dbgSave++;
+    }
     cv::Mat hsv;
     cv::cvtColor(crop, hsv, cv::COLOR_BGR2HSV);
 
@@ -303,17 +336,57 @@ QString MainQuestService::recognizeQuestText()
 
     cv::Mat crop = screen(cv::Rect(x, y, w, h)).clone();
 
+    // 调试：保存ROI截图
+    static int dbgSave = 0;
+    if (dbgSave < 3) {
+        cv::imwrite("debug_quest_roi_" + std::to_string(dbgSave) + ".png", crop);
+        questLog(QString("保存调试ROI截图: debug_quest_roi_%1.png").arg(dbgSave));
+        dbgSave++;
+    }
+
     if (!m_fontLoaded || BitmapFontLib::Instance().isEmpty()) {
         questLog("字库为空，跳过文字识别");
         return {};
     }
 
-    // 用字库二值化 + 识别
-    cv::Mat binary = BitmapFontLib::Instance().binarize(crop);
-    if (binary.empty()) return {};
+    // 用findString直接传彩色图，每个字形用自己的colorFilter做binarize
+    double sim = 0.85;
+    auto results = BitmapFontLib::Instance().findString(crop, sim);
 
-    QString text = BitmapFontLib::Instance().recognizeText(binary);
-    questLog(QString("任务追踪文字: %1").arg(text));
+    // NMS: 同一字形的重叠匹配取最高分
+    std::sort(results.begin(), results.end(),
+        [](const auto &a, const auto &b) { return a.similarity > b.similarity; });
+
+    std::vector<BflFindResult> filtered;
+    std::vector<bool> suppressed(results.size(), false);
+    for (int i = 0; i < (int)results.size(); i++) {
+        if (suppressed[i]) continue;
+        filtered.push_back(results[i]);
+        for (int j = i + 1; j < (int)results.size(); j++) {
+            if (suppressed[j]) continue;
+            if (results[j].charName == results[i].charName) {
+                int x1 = std::max(results[i].x, results[j].x);
+                int x2 = std::min(results[i].x + results[i].width,
+                                  results[j].x + results[j].width);
+                int overlap = x2 - x1;
+                int minWidth = std::min(results[i].width, results[j].width);
+                if (overlap > minWidth * 0.5) {
+                    suppressed[j] = true;
+                }
+            }
+        }
+    }
+
+    // 按所在位置x排序，左到右拼接
+    std::sort(filtered.begin(), filtered.end(),
+        [](const auto &a, const auto &b) { return a.x < b.x; });
+
+    QString text;
+    for (const auto &r : filtered) {
+        text += QString::fromStdString(r.charName);
+    }
+    questLog(QString("任务追踪文字: %1 (匹配%2个 压后%3个)")
+        .arg(text).arg(results.size()).arg(filtered.size()));
     return text;
 }
 
@@ -394,6 +467,7 @@ void MainQuestService::detectGameWindow()
 
 void MainQuestService::run()
 {
+    // 在线程启动时初始化（加载ROI、字库等）
     startService();
     while (toRun) {
         processState();
@@ -414,47 +488,69 @@ void MainQuestService::processState()
     // ── 读取画面右侧任务追踪面板 ──
     case MainQuestState::ReadQuestTrack:
     {
-        questLog("▶ 读取任务追踪面板");
+        questLog("读取任务追踪面板");
 
-        // 1. 用字库识别任务文字（如果有字库的话）
-        QString questText = recognizeQuestText();
-
-        // 2. 在任务追踪区域找坐标链接
-        QList<QRect> coordLinks = findCoordinateLinks(questTrackRoi);
-        if (coordLinks.isEmpty()) {
-            questLog("⚠ 任务追踪区无坐标链接");
-
-            // 也找找蓝色高亮（可能有任务但没坐标=已完成待交）
-            QList<QRect> blueItems = findBlueHighlights(questTrackRoi);
-            if (!blueItems.isEmpty()) {
-                questLog("找到蓝色高亮条目，可能任务已完成待交");
-                currentQuestType = QuestType::Submit;
-                // 点击蓝色条目
-                clickCenter(blueItems.first());
-                QThread::msleep(1000);
-                transitionTo(MainQuestState::DialogSubmit);
-            } else {
-                retryCount++;
-                if (retryCount > 3) {
-                    questLog("无任务信息，等待5秒重试");
-                    retryCount = 0;
-                    QThread::msleep(5000);
-                }
-            }
+        // 直接用 findString 获取匹配结果（含坐标）
+        cv::Mat screen = screenToMat();
+        if (screen.empty()) {
+            questLog("截图为空，等待重试");
+            QThread::msleep(1000);
             break;
         }
 
-        // 3. 有坐标链接 → 点击寻路
-        questLog(QString("找到%1个坐标链接，点击第一个").arg(coordLinks.size()));
-        clickCenter(coordLinks.first());
-
-        // 判断任务类型（暂时都当对话处理，后续字库识别后细化）
-        if (currentQuestType == QuestType::Unknown) {
-            currentQuestType = QuestType::Talk;
+        QRect r = offsetROI(questTrackRoi);
+        int rx = qBound(0, r.x(), screen.cols - 1);
+        int ry = qBound(0, r.y(), screen.rows - 1);
+        int rw = qMin(r.width(),  screen.cols - rx);
+        int rh = qMin(r.height(), screen.rows - ry);
+        if (rw <= 0 || rh <= 0) {
+            questLog("任务追踪ROI无效");
+            QThread::msleep(1000);
+            break;
         }
 
-        m_hasPrevMap = false;
-        transitionTo(MainQuestState::WaitAutoPath);
+        cv::Mat crop = screen(cv::Rect(rx, ry, rw, rh)).clone();
+
+        if (!m_fontLoaded || BitmapFontLib::Instance().isEmpty()) {
+            questLog("字库为空，跳过文字识别");
+            QThread::msleep(1000);
+            break;
+        }
+
+        auto results = BitmapFontLib::Instance().findString(crop, 0.85);
+
+        // 找"未完成"的匹配
+        BflFindResult incompleteMatch;
+        bool foundIncomplete = false;
+        QString allText;
+        for (const auto &r : results) {
+            allText += QString::fromStdString(r.charName);
+            if (QString::fromStdString(r.charName) == QStringLiteral("未完成")) {
+                if (!foundIncomplete || r.similarity > incompleteMatch.similarity) {
+                    incompleteMatch = r;
+                    foundIncomplete = true;
+                }
+            }
+        }
+
+        questLog(QString("识别结果: %1 (匹配%2个)").arg(allText).arg(results.size()));
+
+        if (foundIncomplete) {
+            // 点击"未完成"左侧20px同一行
+            // ROI内坐标 → 屏幕绝对坐标
+            int clickX = rx + incompleteMatch.x - 20;
+            int clickY = ry + incompleteMatch.y + incompleteMatch.height / 2;
+            questLog(QString("任务未完成，点击'未完成'左侧20px: (%1,%2)").arg(clickX).arg(clickY));
+            clickAt(clickX, clickY);
+            m_hasPrevMap = false;
+            m_elapsed.restart();
+            transitionTo(MainQuestState::WaitAutoPath);
+        } else {
+            // 没有"未完成"，可能是已完成待交付
+            questLog("任务可能已完成（无'未完成'字样），尝试交付");
+            currentQuestType = QuestType::Submit;
+            transitionTo(MainQuestState::DialogSubmit);
+        }
         break;
     }
 

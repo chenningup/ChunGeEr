@@ -6,7 +6,10 @@
 BaseService::BaseService(QObject *parent)
     : QThread{parent},toRun(false)
 {
-    connect(&ScreenCaptureManager::Instance(),&ScreenCaptureManager::capturedScreen,this,&BaseService::receiveCaptureScreen,Qt::QueuedConnection);
+    // DirectConnection: 截图回调在 ScreenCaptureManager 线程直接执行
+    // receiveCaptureScreen 只做加锁拷贝，线程安全由 picMutex 保证
+    // 不用 QueuedConnection 因为 QThread::run() 没有 exec() 事件循环
+    connect(&ScreenCaptureManager::Instance(),&ScreenCaptureManager::capturedScreen,this,&BaseService::receiveCaptureScreen,Qt::DirectConnection);
     connect(&WsManager::Instance(),&WsManager::clientRecMeg,this,&BaseService::clientRecMegSlot,Qt::QueuedConnection);
     connect(&Keyboardlistener::Instance(),&Keyboardlistener::keyPressEvent,this,&BaseService::keyPressEventSlot,Qt::QueuedConnection);
 }

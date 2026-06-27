@@ -1262,6 +1262,11 @@ void MainWindow::startSingleTask(int slotIdx)
         break;
     }
     if (svc) {
+        // 确保截图引擎已启动（主线任务不走 WebSocket，不会触发 HandelClientRecStartService）
+        if (!ScreenCaptureManager::Instance().isRunning()) {
+            ScreenCaptureManager::Instance().startCapture();
+            QThread::msleep(500); // 等待 D3D11 初始化完成
+        }
         slot->setService(svc);
         svc->start();
     }

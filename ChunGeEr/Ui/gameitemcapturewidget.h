@@ -78,6 +78,7 @@ private:
     void loadImagesFromDir();
     void rebuildActivePaths();                   // 从列表选中项重建路径+缓存
     void saveRoi(const QString &roiKey, const QRect &rect);  // 保存ROI到config
+    void loadRoiForCurrentSelection();                       // 加载并显示当前ROI类型已有配置
     void handleBflTrainSelection(const QRect &sel);   // 字库训练：框选→binarize→切字→标注→addSample
     void handleBflTestSelection(const QRect &sel);    // 字库测试：框选→binarize→切字→recognize→显示
     void handleBflColorPick(const QRect &sel);        // 取色：点选像素→更新颜色过滤器
@@ -95,6 +96,7 @@ private:
     QPushButton     *m_dirBtn;
     QPushButton     *m_roiBtn;
     QComboBox       *m_roiTypeCombo;
+    QPushButton     *m_roiModifyBtn;
     QLineEdit       *m_nameEdit;
 
     // ── 状态 ──

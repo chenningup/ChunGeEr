@@ -76,6 +76,10 @@ private:
     // 用字库识别任务追踪面板文字
     QString recognizeQuestText();
 
+    // 模板匹配：在截图中找指定模板图片，返回匹配位置（屏幕绝对坐标），未找到返回空QRect
+    QRect findTemplate(const QString &name, double threshold = 0.80);
+    QRect findTemplateInROI(const QString &name, double threshold = 0.80, const QRect &roi = QRect());
+
     // ── 动作 ──
     void   clickAt(int sx, int sy);
     void   clickCenter(const QRect &r);
@@ -88,6 +92,7 @@ private:
 
     MainQuestState currentState = MainQuestState::Idle;
     QuestType currentQuestType = QuestType::Unknown;
+    QString m_currentQuestName;  // 当前识别到的任务名
 
     int retryCount = 0;
     static const int MAX_RETRIES = 6;
@@ -113,6 +118,13 @@ private:
     QRect dialogBtnRoi    = {300, 550, 400, 100};
     // 战斗检测区（顶部血条）
     QRect combatCheckRoi  = {0, 0, 1040, 80};
+    // 对手头像区（左上角目标头像）
+    QRect targetAvatarRoi = {5, 80, 180, 60};
+
+    // 任务名 → 任务类型 映射表（写死）
+    QuestType questTypeFromName(const QString &name) const;
+    // 任务名 → 怪物名 映射表（写死）
+    QString monsterNameFromQuest(const QString &questName) const;
 
     // 字库
     bool   m_fontLoaded = false;
@@ -122,6 +134,10 @@ private:
     cv::Mat m_prevMapCoord;
     bool    m_hasPrevMap = false;
     QElapsedTimer m_elapsed;
+
+    // 模板缓存
+    QHash<QString, cv::Mat> m_templateCache;
+    QString m_templateRoot;
 };
 
 #endif // MAINQUESTSERVICE_H

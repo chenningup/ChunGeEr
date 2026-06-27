@@ -18,6 +18,7 @@
 #include <QWheelEvent>
 #include <QSet>
 #include <QMenu>
+#include <QSpinBox>
 #include <QSettings>
 #include <QCoreApplication>
 #include <functional>
@@ -159,10 +160,13 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         QString::fromUtf8("等级"),
         QString::fromUtf8("技能"), QString::fromUtf8("主线任务"),
         QString::fromUtf8("掉线"), QString::fromUtf8("卡住"),
-        QString::fromUtf8("设置区域")
+        QString::fromUtf8("设置区域"), QString::fromUtf8("对手头像")
     });
     m_roiTypeCombo->setMinimumWidth(90);
     m_roiTypeCombo->setVisible(false);
+    m_roiModifyBtn = new QPushButton(QString::fromUtf8("修改"), this);
+    m_roiModifyBtn->setVisible(false);
+    m_roiModifyBtn->setStyleSheet("background-color: #3498db; color: white;");
 
     m_roiBtn = new QPushButton(QString::fromUtf8("🎯 ROI模式"), this);
 
@@ -180,6 +184,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     topLayout->addWidget(m_ocrBtn);
     topLayout->addWidget(m_nameEdit);
     topLayout->addWidget(m_roiTypeCombo);
+    topLayout->addWidget(m_roiModifyBtn);
     topLayout->addWidget(m_roiBtn);
 
     topLayout->addWidget(m_dirBtn);
@@ -270,6 +275,15 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
     connect(m_dirBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onSelectSaveDir);
     connect(m_roiBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onRoiModeToggle);
     connect(m_loadBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibLoad);
+    // 修改按钮：清除当前选区重新画
+    connect(m_roiModifyBtn, &QPushButton::clicked, this, [this]() {
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
+        m_roiModifyBtn->setVisible(false);
+    });
+    // ROI类型切换时加载已有配置
+    connect(m_roiTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        if (m_roiMode) loadRoiForCurrentSelection();
+    });
     connect(m_saveBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibSave);
     connect(m_trainBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibTrain);
     connect(m_testBflBtn, &QPushButton::clicked, this, &GameItemCaptureWidget::onFontLibTest);
@@ -317,7 +331,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         }
 
         if (!m_roiMode) return;
-        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel"};
+        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar"};
         int idx = m_roiTypeCombo->currentIndex();
         if (idx < 0 || idx >= roiKeys.size()) return;
 
@@ -326,11 +340,23 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         double sy = (double)m_currentFrame.rows / pixSize.height();
         int rx = qBound(0, (int)(sel.x() * sx), m_currentFrame.cols - 1);
         int ry = qBound(0, (int)(sel.y() * sy), m_currentFrame.rows - 1);
+
+        // 将全窗口坐标转为客户区坐标（减去标题栏高度）
+        HWND _hwnd = findGameWindow();
+        if (_hwnd) {
+            RECT _wr; POINT _pt = {0,0};
+            GetWindowRect(_hwnd, &_wr);
+            ClientToScreen(_hwnd, &_pt);
+            int _barH = _pt.y - _wr.top;
+            if (_barH > 0) ry = qMax(0, ry - _barH);
+        }
+
         int rw = qBound(1, (int)(sel.width() * sx), m_currentFrame.cols - rx);
         int rh = qBound(1, (int)(sel.height() * sy), m_currentFrame.rows - ry);
 
         saveRoi(roiKeys[idx], QRect(rx, ry, rw, rh));
-        m_imageLabel->clearSelection();
+        m_roiModifyBtn->setVisible(true);
+        if (m_imageLabel) { m_imageLabel->setSelectionRect(sel); }
     });
     connect(m_itemTree, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         QTreeWidgetItem *item = m_itemTree->itemAt(pos);
@@ -537,7 +563,7 @@ void GameItemCaptureWidget::onPauseToggle()
         m_ocrBtn->setEnabled(false);
         m_trainBflBtn->setEnabled(false);
         m_testBflBtn->setEnabled(false);
-        m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
         m_imageLabel->setCursor(Qt::ArrowCursor);
     }
 }
@@ -609,7 +635,7 @@ void GameItemCaptureWidget::onScreenshot()
 
     addItemToList(itemName, thumb, filePath);
 
-    m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
     m_nameEdit->clear();
 }
 
@@ -877,6 +903,7 @@ void GameItemCaptureWidget::onRoiModeToggle()
         m_itemTree->setVisible(false);
         // 自动暂停
         if (!m_paused) onPauseToggle();
+        loadRoiForCurrentSelection();
     } else {
         m_roiBtn->setText(QString::fromUtf8("🎯 ROI模式"));
         m_roiBtn->setStyleSheet("");
@@ -884,7 +911,8 @@ void GameItemCaptureWidget::onRoiModeToggle()
         m_screenshotBtn->setVisible(true);
         m_nameEdit->setVisible(true);
         m_itemTree->setVisible(true);
-        m_imageLabel->clearSelection();
+        m_roiModifyBtn->setVisible(false);
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
     }
 }
 
@@ -907,6 +935,73 @@ void GameItemCaptureWidget::saveRoi(const QString &roiKey, const QRect &rect)
         QString::fromUtf8("%1: (%2,%3) %4x%5")
             .arg(roiKey).arg(rect.x()).arg(rect.y())
             .arg(rect.width()).arg(rect.height()));
+}
+
+// ════════════════════════════════════════════════
+// 加载并显示当前ROI类型已有配置
+// ════════════════════════════════════════════════
+void GameItemCaptureWidget::loadRoiForCurrentSelection()
+{
+    if (!m_roiMode || m_currentFrame.empty() || m_currentPixmap.isNull()) {
+        m_roiModifyBtn->setVisible(false);
+        return;
+    }
+
+    int idx = m_roiTypeCombo->currentIndex();
+    static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar"};
+    if (idx < 0 || idx >= roiKeys.size()) {
+        m_roiModifyBtn->setVisible(false);
+        return;
+    }
+
+    QString configPath = QCoreApplication::applicationDirPath() + "/config.ini";
+    QSettings s(configPath, QSettings::IniFormat);
+    QString key = roiKeys[idx];
+    if (!s.contains("ROIs/" + key)) {
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
+        m_roiModifyBtn->setVisible(false);
+        return;
+    }
+
+    QStringList parts = s.value("ROIs/" + key).toString().split(",");
+    if (parts.size() != 4) {
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
+        m_roiModifyBtn->setVisible(false);
+        return;
+    }
+
+    // ROI存的是客户区相对坐标，显示时需转回窗口坐标（加回标题栏）
+    QRect clientRect(parts[0].toInt(), parts[1].toInt(),
+                     parts[2].toInt(), parts[3].toInt());
+    int barH = 0;
+    HWND _hwnd = findGameWindow();
+    if (_hwnd) {
+        RECT _wr; POINT _pt = {0,0};
+        GetWindowRect(_hwnd, &_wr);
+        ClientToScreen(_hwnd, &_pt);
+        barH = _pt.y - _wr.top;
+    }
+    QRect windowRect(clientRect.x(), clientRect.y() + barH,
+                      clientRect.width(), clientRect.height());
+    QSize pixSize = m_currentPixmap.size();
+    double sx = (double)pixSize.width() / m_currentFrame.cols;
+    double sy = (double)pixSize.height() / m_currentFrame.rows;
+
+    QRect labelRect(
+        qRound(windowRect.x() * sx),
+        qRound(windowRect.y() * sy),
+        qRound(windowRect.width() * sx),
+        qRound(windowRect.height() * sy)
+    );
+
+    infof("[ROI] 加载已有配置: {}={},{},{},{}  barH={}  label({},{},{},{})",
+          key.toStdString(), clientRect.x(), clientRect.y(),
+          clientRect.width(), clientRect.height(), barH,
+          labelRect.x(), labelRect.y(),
+          labelRect.width(), labelRect.height());
+
+    if (m_imageLabel) { m_imageLabel->setSelectionRect(labelRect); }
+    m_roiModifyBtn->setVisible(true);
 }
 
 // ════════════════════════════════════════════════
@@ -1077,6 +1172,20 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
     auto *imgTitle = new QLabel(QString::fromUtf8("👆 滚轮缩放 | 点击像素取色 | 再点取消"), &colorDlg);
     imgTitle->setStyleSheet("font-weight: bold; color: #ccc; font-size: 12px;");
     rightPanel->addWidget(imgTitle);
+
+    // 偏色范围调节
+    auto *biasLayout = new QHBoxLayout();
+    auto *biasLabel = new QLabel(QString::fromUtf8("偏色范围: ±"), &colorDlg);
+    biasLabel->setStyleSheet("color: #ccc; font-size: 12px;");
+    auto *biasSpin = new QSpinBox(&colorDlg);
+    biasSpin->setRange(1, 128);
+    biasSpin->setValue(48);
+    biasSpin->setFixedWidth(60);
+    biasSpin->setStyleSheet("color: #ddd; background: #333; border: 1px solid #555;");
+    biasLayout->addWidget(biasLabel);
+    biasLayout->addWidget(biasSpin);
+    biasLayout->addStretch();
+    rightPanel->addLayout(biasLayout);
 
     // QGraphicsView 可缩放
     QGraphicsScene *scene = new QGraphicsScene(&colorDlg);
@@ -1323,8 +1432,8 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
             clickedColor = QColor(gray, gray, gray);
         }
 
-        // 颜色范围：±48 偏色
-        int bias = 0x30;
+        // 颜色范围：从 SpinBox 读取偏色
+        int bias = biasSpin->value();
         int cr = clickedColor.red(), cg = clickedColor.green(), cb = clickedColor.blue();
 
         // 已蒙层的像素点击无反应，取消蒙层只能通过左侧颜色列表✕按钮
@@ -1352,7 +1461,7 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
                     }
                 }
             }
-            tempFilter.add(clickedColor);
+            tempFilter.add(clickedColor, QColor(bias, bias, bias));
         }
         infof("[BFL] onClick: before updateAll, points={}", tempFilter.points.size());
         updateAll();
@@ -1373,7 +1482,7 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
     connect(cancelBtn, &QPushButton::clicked, &colorDlg, &QDialog::reject);
 
     if (colorDlg.exec() != QDialog::Accepted) {
-        m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
         return;
     }
 
@@ -1390,7 +1499,7 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
             QString::fromUtf8("未检测到前景像素！请确认:\n"
                               "1. 已取色(至少点一个文字像素)\n"
                               "2. 框选的确实是文字区域"));
-        m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
         return;
     }
 
@@ -1449,12 +1558,12 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
     connect(cancel, &QPushButton::clicked, &dlg, &QDialog::reject);
 
     if (dlg.exec() != QDialog::Accepted) {
-        m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
         return;
     }
 
     QString text = te->text().trimmed();
-    if (text.isEmpty()) { m_imageLabel->clearSelection(); return; }
+        if (m_imageLabel) { if (text.isEmpty()) { m_imageLabel->clearSelection(); return; } }
 
     // 整行作为一个整体训练，charName = 用户输入的整行文字
     lib.addChar(text.toUtf8().toStdString(), binary);
@@ -1463,7 +1572,7 @@ void GameItemCaptureWidget::handleBflTrainSelection(const QRect &sel)
     QMessageBox::information(this, QString::fromUtf8("训练完成"),
         QString::fromUtf8("已训练整行: \"%1\" (%2x%3)").arg(text).arg(binary.cols).arg(binary.rows));
 
-    m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
 }
 
 // 测试：框选 → binarize → 切字 → recognize → 显示
@@ -1510,7 +1619,7 @@ void GameItemCaptureWidget::handleBflTestSelection(const QRect &sel)
     if (results.empty()) {
         QMessageBox::information(this, QString::fromUtf8("\u8bc6\u522b\u7ed3\u679c"),
             QString::fromUtf8("\u672a\u8bc6\u522b\u5230\u5b57\u7b26"));
-        m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
         return;
     }
 
@@ -1547,7 +1656,7 @@ void GameItemCaptureWidget::handleBflTestSelection(const QRect &sel)
         QString::fromUtf8("\u8bc6\u522b\u6587\u5b57: %1\n\n\u8be6\u60c5:\n%2")
             .arg(text, detailLines.join("\n")));
 
-    m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
 }
 
 void GameItemCaptureWidget::handleBflColorPick(const QRect &sel)
@@ -1607,5 +1716,5 @@ void GameItemCaptureWidget::handleBflColorPick(const QRect &sel)
     infof("[BFL] 取色 #%d: ({},{}) → %s (共%d种)",
           n, cx, cy, lastHex.toStdString().c_str(), n);
 
-    m_imageLabel->clearSelection();
+        if (m_imageLabel) { m_imageLabel->clearSelection(); }
 }

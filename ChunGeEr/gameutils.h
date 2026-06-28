@@ -86,9 +86,10 @@ public:
     QString templateRoot() const { return m_templateRoot; }
     MatchResult bestMatch(const cv::Mat &frame, const QString &templateDir, const QString &nameFilter = {});
 
-private:
     // 裁剪 frame 中 roi 区域，若 roi 无效则返回空 Mat
     cv::Mat cropROI(const cv::Mat &frame, const QRect &roi);
+
+private:
 
     QString m_templateRoot;
     QHash<QString, cv::Mat> m_templateCache;

@@ -5,6 +5,7 @@
 #include "XuLog.h"
 #include <QThread>
 #include <QFileInfo>
+#include <QDir>
 #include <QCoreApplication>
 #include <QSettings>
 #include <windows.h>
@@ -356,7 +357,7 @@ void AutoLogin::processState()
                 ::SetWindowPos(m_gameHwnd, HWND_TOP, targetX, targetY,
                                targetW, targetH,
                                SWP_SHOWWINDOW);
-                QThread::msleep(300);
+                QThread::msleep(2000);
                 RECT wr;
                 ::GetWindowRect(m_gameHwnd, &wr);
                 loginLog(QString("定位后: (%1,%2) %3x%4")
@@ -669,7 +670,23 @@ void AutoLogin::processState()
         if (frame.empty()) return;
 
         auto &gu = GameUtils::Instance();
+
+        // ── 调试：保存全帧和位置ROI裁剪图 ──
+        if (m_phaseTicks % 5 == 0) {
+            QString exeDir = QCoreApplication::applicationDirPath() + "/";
+            std::string ts = std::to_string(m_phaseTicks);
+            cv::imwrite((exeDir + "verify_frame_" + QString::fromStdString(ts) + ".png").toStdString(), frame);
+            cv::Mat locRoi = gu.cropROI(frame, gu.locationROI());
+            if (!locRoi.empty()) {
+                cv::imwrite((exeDir + "verify_location_roi_" + QString::fromStdString(ts) + ".png").toStdString(), locRoi);
+            }
+        }
+
         auto locMatch = gu.detectLocation(frame);
+        loginLog(QString("  location匹配: name=%1 conf=%2")
+            .arg(locMatch.name.isEmpty() ? "<空>" : locMatch.name)
+            .arg(locMatch.confidence, 0, 'f', 3));
+
         bool hasLocation = !locMatch.name.isEmpty() && locMatch.confidence > 0.6;
 
         if (hasLocation) {

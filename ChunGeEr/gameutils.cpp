@@ -58,7 +58,7 @@ cv::Mat GameUtils::cropROI(const cv::Mat &frame, const QRect &roi)
 {
     if (frame.empty() || roi.isEmpty()) return {};
 
-    // ROI存的是窗口相对坐标，需叠加游戏窗口屏幕位置
+    // ROI存的是窗口客户区相对坐标，需用ClientToScreen获取客户区屏幕位置
     int winX = 0, winY = 0;
     HWND hwnd = FindWindowW(nullptr, L"\u5927\u5510\u65e0\u53cc\u516c\u6d4b - \u4e03\u4fa0\u4e94\u4e49 (4.0.58:1041281  1.0.5:1039767)");
     if (!hwnd) {
@@ -72,14 +72,14 @@ cv::Mat GameUtils::cropROI(const cv::Mat &frame, const QRect &roi)
         }
     }
     if (hwnd) {
-        RECT wr;
-        if (GetWindowRect(hwnd, &wr)) {
-            winX = wr.left;
-            winY = wr.top;
+        POINT pt{0, 0};
+        if (ClientToScreen(hwnd, &pt)) {
+            winX = pt.x;
+            winY = pt.y;
         }
     }
 
-    // 窗口相对 → 屏幕绝对
+    // 窗口客户区相对 → 屏幕绝对
     QRect screenROI(roi.x() + winX, roi.y() + winY, roi.width(), roi.height());
     QRect safe = screenROI.intersected(QRect(0, 0, frame.cols, frame.rows));
     if (safe.isEmpty()) return {};

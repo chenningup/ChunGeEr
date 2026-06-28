@@ -50,15 +50,11 @@ private:
     void processState();
 
     // ── 视觉检测 ──
-    bool   isDialogOpen();          // 对话框区域暗像素比例
-    double darkRatio(const QRect &roi);
 
     // 蓝色高亮条目（活跃任务）
     QList<QRect> findBlueHighlights(const QRect &roi);
     // 坐标链接 (数字,数字) — 青色文字
     QList<QRect> findCoordinateLinks(const QRect &roi);
-    // 金色按钮（对话/交付按钮）
-    QList<QRect> findGoldButtons(const QRect &roi);
 
     // 地图坐标区域帧差 — 只对比这一小块区域
     bool   isMapCoordChanging();
@@ -106,8 +102,6 @@ private:
     QRect questTrackRoi   = {716, 297, 267, 183};
     // 地图坐标区域（右上角小地图旁边）
     QRect mapCoordRoi     = {882, 57, 108, 26};
-    // 对话框检测区
-    QRect dialogCheckRoi  = {150, 350, 700, 300};
     // 对话按钮区
     QRect dialogBtnRoi    = {300, 550, 400, 100};
     // 战斗检测区（顶部血条）

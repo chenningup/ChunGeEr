@@ -97,31 +97,6 @@ QRect MainQuestService::offsetROI(const QRect &r) const
 // 视觉检测
 // ════════════════════════════════════════
 
-double MainQuestService::darkRatio(const QRect &roi)
-{
-    cv::Mat screen = screenToMat();
-    if (screen.empty()) return 0;
-
-    QRect r = offsetROI(roi);
-    int x = qBound(0, r.x(), screen.cols - 1);
-    int y = qBound(0, r.y(), screen.rows - 1);
-    int w = qMin(r.width(),  screen.cols - x);
-    int h = qMin(r.height(), screen.rows - y);
-    if (w <= 0 || h <= 0) return 0;
-
-    cv::Mat crop = screen(cv::Rect(x, y, w, h));
-    cv::Mat gray;
-    cv::cvtColor(crop, gray, cv::COLOR_BGR2GRAY);
-    int dark = cv::countNonZero(gray < 80);
-    int total = gray.rows * gray.cols;
-    return (double)dark / total;
-}
-
-bool MainQuestService::isDialogOpen()
-{
-    return darkRatio(dialogCheckRoi) > 0.25;
-}
-
 QList<QRect> MainQuestService::findBlueHighlights(const QRect &roi)
 {
     QList<QRect> results;
@@ -219,58 +194,6 @@ QList<QRect> MainQuestService::findCoordinateLinks(const QRect &roi)
     // 从下到上(描述区最下面的坐标通常是目的地)
     std::sort(results.begin(), results.end(), [](const QRect &a, const QRect &b) {
         return a.y() > b.y();
-    });
-    return results;
-}
-
-QList<QRect> MainQuestService::findGoldButtons(const QRect &roi)
-{
-    QList<QRect> results;
-    cv::Mat screen = screenToMat();
-    if (screen.empty()) return results;
-
-    QRect r = offsetROI(roi);
-    int x = qBound(0, r.x(), screen.cols - 1);
-    int y = qBound(0, r.y(), screen.rows - 1);
-    int w = qMin(r.width(),  screen.cols - x);
-    int h = qMin(r.height(), screen.rows - y);
-    if (w <= 0 || h <= 0) return results;
-
-    cv::Mat crop = screen(cv::Rect(x, y, w, h)).clone();
-
-    // 调试:保存ROI截图
-    static int dbgSave = 0;
-    if (dbgSave < 3) {
-        cv::imwrite("debug_quest_roi_" + std::to_string(dbgSave) + ".png", crop);
-        questLog(QString("保存调试ROI截图: debug_quest_roi_%1.png").arg(dbgSave));
-        dbgSave++;
-    }
-    cv::Mat hsv;
-    cv::cvtColor(crop, hsv, cv::COLOR_BGR2HSV);
-
-    cv::Mat mask1, mask2, mask;
-    cv::inRange(hsv, cv::Scalar(10, 60, 100), cv::Scalar(40, 255, 255), mask1);
-    cv::inRange(hsv, cv::Scalar(10, 30, 160), cv::Scalar(35, 255, 255), mask2);
-    mask = mask1 | mask2;
-
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(12, 4));
-    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
-    cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
-
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-    for (auto &cnt : contours) {
-        cv::Rect br = cv::boundingRect(cnt);
-        if (br.width < 30 || br.height < 12) continue;
-        if (br.width > 300 || br.height > 80) continue;
-        double ratio = (double)br.width / br.height;
-        if (ratio < 1.2 || ratio > 8.0) continue;
-        results.append(QRect(x + br.x, y + br.y, br.width, br.height));
-    }
-
-    std::sort(results.begin(), results.end(), [](const QRect &a, const QRect &b) {
-        return a.width() * a.height() > b.width() * b.height();
     });
     return results;
 }
@@ -953,7 +876,7 @@ void MainQuestService::processState()
             MouseKeyboardManager::Instance().clickButton('1');
             randSleep(50, 80);
             MouseKeyboardManager::Instance().clickButton('1');
-            randSleep(50, 80);
+            randSleep(500, 1000);
             MouseKeyboardManager::Instance().clickButton('2');
             randSleep(1000, 1500);
 
@@ -985,49 +908,83 @@ void MainQuestService::processState()
             // ═══ 对话任务 ═══
             questLog("▶ 对话任务");
 
-            if (!isDialogOpen()) {
-                bool found = false;
-                for (int i = 0; i < 20; i++) {
-                    QThread::msleep(500);
-                    if (!toRun) return;
-                    if (isDialogOpen()) { found = true; break; }
+            // 等待对话框出现（检测取消按钮）
+            bool dialogFound = false;
+            for (int i = 0; i < 20; i++) {
+                QThread::msleep(500);
+                if (!toRun) return;
+                QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+                if (!cancelRect.isNull()) {
+                    dialogFound = true;
+                    break;
                 }
-                if (!found) {
-                    questLog("⚠ 无对话框,尝试点击NPC");
-                    QRect npcRoi = offsetROI(QRect(400, 300, 240, 200));
-                    clickAt(npcRoi.center().x(), npcRoi.center().y());
-                    QThread::msleep(1500);
-                    if (!isDialogOpen()) {
-                        questLog("仍无对话框,回到任务追踪重试");
-                        transitionTo(MainQuestState::ReadQuestTrack);
-                        break;
+            }
+
+            if (!dialogFound) {
+                questLog("⚠ 无对话框,尝试点击NPC");
+                QRect npcRoi = offsetROI(QRect(400, 300, 240, 200));
+                clickAt(npcRoi.center().x(), npcRoi.center().y());
+                QThread::msleep(1500);
+                QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+                if (cancelRect.isNull()) {
+                    questLog("仍无对话框,回到任务追踪重试");
+                    transitionTo(MainQuestState::ReadQuestTrack);
+                    break;
+                }
+            }
+
+            // 循环对话：第一轮点拜见小师姑，后续点对话
+            int dialogRounds = 0;
+            while (toRun) {
+                QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+                if (cancelRect.isNull()) {
+                    questLog("✅ 对话框消失,对话结束");
+                    break;
+                }
+
+                dialogRounds++;
+                questLog(QString("对话第 %1 轮").arg(dialogRounds));
+
+                // 在取消按钮上方区域找对话按钮
+                int searchTop = qMax(0, cancelRect.y() - 800);
+                int searchHeight = cancelRect.y() - searchTop;
+                QRect searchArea(cancelRect.x() - 50, searchTop,
+                                 cancelRect.width() + 100, searchHeight);
+
+                // 按任务名+轮次选按钮图
+                QString btnImage;
+                if (m_currentQuestName.contains("拜见宁婉儿")) {
+                    if (dialogRounds == 1) {
+                        btnImage = "popups/拜见小师姑.png";
+                    } else {
+                        btnImage = "popups/对话.png";
+                    }
+                } else {
+                    btnImage = "popups/对话.png";
+                }
+
+                bool clicked = false;
+                if (!btnImage.isEmpty()) {
+                    QRect btnRect = findTemplateInROI(btnImage, 0.80, searchArea);
+                    if (!btnRect.isNull()) {
+                        questLog(QString("找到对话按钮: %1 at (%2,%3)")
+                                     .arg(btnImage)
+                                     .arg(btnRect.center().x())
+                                     .arg(btnRect.center().y()));
+                        clickCenter(btnRect);
+                        randSleep(500, 1000);
+                        clicked = true;
                     }
                 }
+
+                if (!clicked) {
+                    questLog(QString("⚠ 未找到对话按钮(%1),等待重试").arg(btnImage));
+                }
+
+                randSleep(1200, 2000);
             }
 
-            // 点击对话按钮
-            QList<QRect> btns = findGoldButtons(dialogBtnRoi);
-            if (!btns.isEmpty()) {
-                clickCenter(btns.first());
-                questLog(QString("✅ 点击对话按钮 at (%1,%2)")
-                             .arg(btns.first().center().x())
-                             .arg(btns.first().center().y()));
-            } else {
-                QRect br = offsetROI(dialogBtnRoi);
-                int bx = br.x() + br.width() * 2 / 3;
-                int by = br.y() + br.height() / 2;
-                clickAt(bx, by);
-                questLog(QString("固定位对话 (%1,%2)").arg(bx).arg(by));
-            }
-
-            // 判断对话是否结束
-            QThread::msleep(2000);
-            if (isDialogOpen()) {
-                questLog("对话框仍在,继续对话");
-            } else {
-                questLog("对话框消失,回到任务追踪检查进度");
-                currentQuestType = QuestType::Unknown;
-            }
+            currentQuestType = QuestType::Unknown;
             transitionTo(MainQuestState::ReadQuestTrack);
         }
         break;
@@ -1117,21 +1074,6 @@ void MainQuestService::processState()
                 }
             }
 
-            // fallback: 金色按钮
-            // if (!clicked) {
-            //     QList<QRect> btns = findGoldButtons(dialogBtnRoi);
-            //     if (!btns.isEmpty()) {
-            //         clickCenter(btns.first());
-            //         questLog("✅ fallback金色按钮点击");
-            //         clicked = true;
-            //     }
-            // }
-
-            // if (!clicked) {
-            //     questLog("⚠ 未找到对话按钮，点取消按钮上方区域");
-            //     // 点搜索区域中心
-            //     clickAt(searchArea.center().x(), searchArea.center().y());
-            // }
             randSleep(1200, 2000);
         }
 

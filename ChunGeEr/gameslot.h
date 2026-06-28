@@ -10,6 +10,7 @@
 #include <windows.h>
 
 class BaseService;
+class BackgroundTaskService;
 
 // ════════════════════════════════════════════
 // 一个游戏账号 = 一个 GameSlot
@@ -72,6 +73,11 @@ public:
     void setService(BaseService *svc) { m_service = svc; }
     void stopService();
 
+    // ── 后台任务服务 ──
+    BackgroundTaskService *backgroundService() const { return m_bgService; }
+    void startBackgroundService();
+    void stopBackgroundService();
+
     // ── 检测刷新 ──
     void detectAll(const class cv::Mat &frame);
 
@@ -101,6 +107,7 @@ private:
 
     State m_state = Idle;
     BaseService *m_service = nullptr;
+    BackgroundTaskService *m_bgService = nullptr;
 
     // ── 模板缓存 ──
     QHash<QString, cv::Mat> m_templateCache;

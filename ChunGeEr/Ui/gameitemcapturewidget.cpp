@@ -34,10 +34,11 @@ static const QStringList kCatCN = {
     QString::fromUtf8("地点"), QString::fromUtf8("任务"),
     QString::fromUtf8("弹窗"), QString::fromUtf8("角色"),
     QString::fromUtf8("启动"), QString::fromUtf8("等级"),
-    QString::fromUtf8("设置"), QString::fromUtf8("图标")
+    QString::fromUtf8("设置"), QString::fromUtf8("图标"),
+    QString::fromUtf8("掉线")
 };
 static const QStringList kCatEN = {
-    "items", "skills", "locations", "quests", "popups", "roles", "login", "levels", "settings", "icons"
+    "items", "skills", "locations", "quests", "popups", "roles", "login", "levels", "settings", "icons", "disconnects"
 };
 static QString catCN2EN(const QString &cn) {
     int i = kCatCN.indexOf(cn);
@@ -161,7 +162,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         QString::fromUtf8("技能"), QString::fromUtf8("主线任务"),
         QString::fromUtf8("掉线"), QString::fromUtf8("卡住"),
         QString::fromUtf8("设置区域"), QString::fromUtf8("对手头像"),
-        QString::fromUtf8("任务对话区域")
+        QString::fromUtf8("任务对话区域"), QString::fromUtf8("登录奖励")
     });
     m_roiTypeCombo->setMinimumWidth(90);
     m_roiTypeCombo->setVisible(false);
@@ -332,7 +333,7 @@ GameItemCaptureWidget::GameItemCaptureWidget(QWidget *parent)
         }
 
         if (!m_roiMode) return;
-        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar", "DialogBtn"};
+        static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar", "DialogBtn", "LoginReward"};
         int idx = m_roiTypeCombo->currentIndex();
         if (idx < 0 || idx >= roiKeys.size()) return;
 
@@ -949,7 +950,7 @@ void GameItemCaptureWidget::loadRoiForCurrentSelection()
     }
 
     int idx = m_roiTypeCombo->currentIndex();
-    static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar", "DialogBtn"};
+    static const QStringList roiKeys = {"Location", "MapCoord", "Level", "Skills", "MainQuest", "Disconnect", "Stopped", "SettingsPanel", "TargetAvatar", "DialogBtn", "LoginReward"};
     if (idx < 0 || idx >= roiKeys.size()) {
         m_roiModifyBtn->setVisible(false);
         return;

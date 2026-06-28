@@ -8,6 +8,7 @@
 #include "service/dungeon/dungeonservice.h"
 #include "service/CatchMonsters/catchmonstersservice.h"
 #include "service/MainQuest/mainquestservice.h"
+#include "service/BackgroundTask/backgroundtaskservice.h"
 #include "service/Record/record.h"
 #include "./KeyboardListener/keyboardlistener.h"
 #include "./Encode/encodingmanager.h"
@@ -1268,6 +1269,27 @@ void MainWindow::startSingleTask(int slotIdx)
             QThread::msleep(500); // 等待 D3D11 初始化完成
         }
         slot->setService(svc);
+
+        // 启动后台任务服务，并连接 pause/resume 信号
+        slot->startBackgroundService();
+        auto *bgSvc = slot->backgroundService();
+        if (bgSvc) {
+            // 后台请求暂停时，暂停主任务
+            QObject::connect(bgSvc, &BackgroundTaskService::pauseRequested, [svc]() {
+                if (auto *mq = dynamic_cast<MainQuestService*>(svc))
+                    mq->pauseBackground();
+            });
+            // 后台完成时恢复主任务
+            QObject::connect(bgSvc, &BackgroundTaskService::resumeRequested, [svc]() {
+                if (auto *mq = dynamic_cast<MainQuestService*>(svc))
+                    mq->resumeBackground();
+            });
+            // 后台日志
+            QObject::connect(bgSvc, &BackgroundTaskService::log, this, [this](const QString &msg) {
+                ui->textEdit->append(msg);
+            });
+        }
+
         svc->start();
     }
 
@@ -1303,6 +1325,7 @@ void MainWindow::addActiveTask(int slotIdx, const QString &taskName)
     connect(stopBtn, &QPushButton::clicked, this, [this, idx]() {
         auto *slot = mScheduler->slot(idx);
         if (slot) {
+            slot->stopBackgroundService();
             slot->stopService();
             slot->setState(GameSlot::Idle);
         }
@@ -1334,6 +1357,7 @@ void MainWindow::stopService()
     for (int i = 0; i < 3; i++) {
         auto *slot = mScheduler->slot(i);
         if (slot) {
+            slot->stopBackgroundService();
             slot->stopService();
             slot->setState(GameSlot::Idle);
         }

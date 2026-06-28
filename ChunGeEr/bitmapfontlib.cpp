@@ -515,39 +515,40 @@ int BitmapFontLib::trainFromLine(const cv::Mat &binaryLine, const QString &text)
 // ════════════════════════════════════════════════
 std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &image, double sim) const
 {
+    QMutexLocker lock(&m_findMutex);  // 线程安全：后台任务和主线任务共享BFL
     std::vector<BflFindResult> results;
     if (image.empty() || m_glyphs.isEmpty()) return results;
 
     int imgW = image.cols, imgH = image.rows;
 
-    infof("[BFL] findString: image {}x{}, glyphs={}", imgW, imgH, m_glyphs.size());
+    //infof("[BFL] findString: image {}x{}, glyphs={}", imgW, imgH, m_glyphs.size());
     for (auto it = m_glyphs.begin(); it != m_glyphs.end(); ++it) {
         const std::string &charName = it.key().toStdString();
         for (const BflGlyph &g : it.value()) {
-            infof("[BFL]  glyph: name={} w={} h={} hexLen={} colorPoints={}",
-                  charName, g.width, g.height, g.hexBits.size(), g.colorFilter.points.size());
+            //infof("[BFL]  glyph: name={} w={} h={} hexLen={} colorPoints={}",
+            //      charName, g.width, g.height, g.hexBits.size(), g.colorFilter.points.size());
             if (g.width > imgW || g.height > imgH) {
-                infof("[BFL]   skip: glyph {}x{} > image {}x{}", g.width, g.height, imgW, imgH);
+                //infof("[BFL]   skip: glyph {}x{} > image {}x{}", g.width, g.height, imgW, imgH);
                 continue;
             }
 
             // 用字形独立颜色binarize；没有则用全局
             const BflColorFilter &cf = g.colorFilter.isEmpty() ? m_colorFilter : g.colorFilter;
-            infof("[BFL]   cf points={} (global={})", cf.points.size(), g.colorFilter.isEmpty());
+            //infof("[BFL]   cf points={} (global={})", cf.points.size(), g.colorFilter.isEmpty());
             cv::Mat binary = binarizeWith(image, cf);
             if (binary.empty()) {
                 infof("[BFL]   binarize returned empty!");
                 continue;
             }
             int nonZero = cv::countNonZero(binary);
-            infof("[BFL]   binarize ok: nonZero={}/{}", nonZero, binary.total());
+            //infof("[BFL]   binarize ok: nonZero={}/{}", nonZero, binary.total());
             // 调试：保存原图和二值化图
             static int dbgIdx = 0;
             if (dbgIdx < 5) {
                 std::string prefix = "debug_bfl_" + std::to_string(dbgIdx);
                 cv::imwrite(prefix + "_orig.png", image);
                 cv::imwrite(prefix + "_binary.png", binary);
-                infof("[BFL]   saved debug images: {}_orig.png, {}_binary.png", prefix, prefix);
+                //infof("[BFL]   saved debug images: {}_orig.png, {}_binary.png", prefix, prefix);
                 dbgIdx++;
             }
 

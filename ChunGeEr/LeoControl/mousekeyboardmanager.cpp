@@ -217,7 +217,7 @@ void MouseKeyboardManager::moveMouse(int x, int y)
 
 void MouseKeyboardManager::mouseMoveDirect(int x, int y)
 {
-    infof("mouseMoveDirect enter,x:{},y:{}",x,y);
+    //infof("mouseMoveDirect enter,x:{},y:{}",x,y);
     QDateTime start = QDateTime::currentDateTime();
     QPoint current = QCursor::pos();
     int moveXpiece = x - current.x() > 0 ? 100 : -100;
@@ -350,7 +350,7 @@ void MouseKeyboardManager::keyRelease(int key)
     {
         endkey = key+32;
     }
-    infof("keyRelease enter,endkey:{}",endkey);
+    //infof("keyRelease enter,endkey:{}",endkey);
     QDateTime start = QDateTime::currentDateTime();
     unsigned char tmp[100] = {0} ;
     QByteArray array;

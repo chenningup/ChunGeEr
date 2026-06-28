@@ -6,6 +6,8 @@
 #include <QVector>
 #include <QString>
 #include <QColor>
+#include <QMutex>
+#include <QMutexLocker>
 #include <opencv2/opencv.hpp>
 
 // ════════════════════════════════════════════════
@@ -138,6 +140,7 @@ public:
     /// 在彩色图像中查找所有字库字符（每个字形用自己的颜色过滤器做binarize）
     /// image: 彩色搜索区域（BGR/BGRA）
     /// sim: 相似度阈值（0.0~1.0）
+    /// ⚠ 线程安全：内部用 QMutexLocker 保护
     std::vector<BflFindResult> findString(const cv::Mat &image, double sim = 0.9) const;
 
     /// 在彩色图像中查找指定名称的字符
@@ -169,6 +172,9 @@ private:
     static BflGlyph makeGlyph(const cv::Mat &binaryChar);
 
     BflColorFilter m_colorFilter;
+
+    // 线程安全：findString 在后台任务和主任务线程间共享，必须加锁
+    mutable QMutex m_findMutex;
 
     // 每个字符名 → 多个样本（支持同一字符的变体）
     QHash<QString, QVector<BflGlyph>> m_glyphs;

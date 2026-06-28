@@ -3,13 +3,10 @@
 #include "../../signalslotconnector.h"
 #include "XuLog.h"
 #include <QThread>
-#include <QRandomGenerator>
 #include <QSettings>
 #include <QCoreApplication>
 #include <windows.h>
 #include <algorithm>
-#include <fstream>
-#include <iterator>
 
 MainQuestService::MainQuestService(QObject *parent) : BaseService(parent) {}
 
@@ -86,11 +83,6 @@ void MainQuestService::transitionTo(MainQuestState next)
                  .arg(static_cast<int>(next)));
     currentState = next;
     retryCount = 0;
-}
-
-QRect MainQuestService::offsetROI(const QRect &r) const
-{
-    return QRect(r.x() + gameOffsetX, r.y() + gameOffsetY, r.width(), r.height());
 }
 
 // ════════════════════════════════════════
@@ -333,45 +325,9 @@ QString MainQuestService::recognizeQuestText()
 // 动作
 // ════════════════════════════════════════
 
-void MainQuestService::clickAt(int sx, int sy)
-{
-    MouseKeyboardManager::Instance().mouseMoveDirect(sx, sy);
-    QThread::msleep(50);
-    MouseKeyboardManager::Instance().mouseClick();
-    questLog(QString("点击(%1,%2)").arg(sx).arg(sy));
-
-    // 点击后随机延时1~2秒，再随机移开100~200px
-    randSleep(1000, 2000);
-    int dx = 100 + (rand() % 101);
-    int dy = 100 + (rand() % 101);
-    if (rand() & 1) dx = -dx;
-    if (rand() & 1) dy = -dy;
-    MouseKeyboardManager::Instance().mouseMoveDirect(sx + dx, sy + dy);
-}
-
-void MainQuestService::clickCenter(const QRect &r)
-{
-    clickAt(r.center().x(), r.center().y());
-}
-
 // ════════════════════════════════════════
 // 工具
 // ════════════════════════════════════════
-
-cv::Mat MainQuestService::screenToMat()
-{
-    picMutex.lock();
-    if (!curPic.data || curPic.data->empty()) {
-        picMutex.unlock();
-        return {};
-    }
-    cv::Mat img(curPic.des.Height, curPic.des.Width, CV_8UC4,
-                curPic.data->data(), curPic.RowPitch);
-    cv::Mat bgr;
-    cv::cvtColor(img, bgr, cv::COLOR_BGRA2BGR);
-    picMutex.unlock();
-    return bgr;
-}
 
 void MainQuestService::questLog(const QString &msg)
 {
@@ -380,115 +336,6 @@ void MainQuestService::questLog(const QString &msg)
     emit SignalSlotConnector::Instance().log(log);
 }
 
-void MainQuestService::randSleep(int minMs, int maxMs)
-{
-    int ms = minMs + QRandomGenerator::global()->bounded(maxMs - minMs + 1);
-    QThread::msleep(ms);
-}
-
-QRect MainQuestService::findTemplate(const QString &name, double threshold)
-{
-    cv::Mat screen = screenToMat();
-    if (screen.empty()) return QRect();
-
-    // 加载模板(带缓存)
-    if (!m_templateCache.contains(name)) {
-        if (m_templateRoot.isEmpty())
-            m_templateRoot = QCoreApplication::applicationDirPath() + "/images";
-        QString path = m_templateRoot + "/" + name;
-        // Windows 中文路径:用 _wfopen 读取字节,cv::imdecode 解码
-        FILE *fp = _wfopen(reinterpret_cast<const wchar_t *>(path.utf16()), L"rb");
-        if (!fp) {
-            questLog(QString("模板图片不存在: %1").arg(path));
-            return QRect();
-        }
-        fseek(fp, 0, SEEK_END);
-        long sz = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        std::vector<char> buf(sz);
-        fread(buf.data(), 1, sz, fp);
-        fclose(fp);
-        cv::Mat tmpl = cv::imdecode(buf, cv::IMREAD_COLOR);
-        if (tmpl.empty()) {
-            questLog(QString("模板图片解码失败: %1").arg(path));
-            return QRect();
-        }
-        m_templateCache[name] = tmpl;
-    }
-    const cv::Mat &tmpl = m_templateCache[name];
-
-    cv::Mat result;
-    cv::matchTemplate(screen, tmpl, result, cv::TM_CCOEFF_NORMED);
-
-    double maxVal;
-    cv::Point maxLoc;
-    cv::minMaxLoc(result, nullptr, &maxVal, nullptr, &maxLoc);
-
-    if (maxVal >= threshold) {
-        return QRect(maxLoc.x, maxLoc.y, tmpl.cols, tmpl.rows);
-    }
-    return QRect();
-}
-
-QRect MainQuestService::findTemplateInROI(const QString &name, double threshold, const QRect &roi)
-{
-    cv::Mat screen = screenToMat();
-    if (screen.empty()) return QRect();
-
-    // 加载模板（带缓存）
-    if (!m_templateCache.contains(name)) {
-        if (m_templateRoot.isEmpty())
-            m_templateRoot = QCoreApplication::applicationDirPath() + "/images";
-        QString path = m_templateRoot + "/" + name;
-        FILE *fp = _wfopen(reinterpret_cast<const wchar_t *>(path.utf16()), L"rb");
-        if (!fp) {
-            questLog(QString("模板图片不存在: %1").arg(path));
-            return QRect();
-        }
-        fseek(fp, 0, SEEK_END);
-        long sz = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        std::vector<char> buf(sz);
-        fread(buf.data(), 1, sz, fp);
-        fclose(fp);
-        cv::Mat tmpl = cv::imdecode(buf, cv::IMREAD_COLOR);
-        if (tmpl.empty()) {
-            questLog(QString("模板图片解码失败: %1").arg(path));
-            return QRect();
-        }
-        m_templateCache[name] = tmpl;
-    }
-    const cv::Mat &tmpl = m_templateCache[name];
-
-    // 裁剪 ROI 区域
-    QRect r = offsetROI(roi);
-    int rx = qBound(0, r.x(), screen.cols - 1);
-    int ry = qBound(0, r.y(), screen.rows - 1);
-    int rw = qMin(r.width(), screen.cols - rx);
-    int rh = qMin(r.height(), screen.rows - ry);
-    if (rw <= 0 || rh <= 0 || rw < tmpl.cols || rh < tmpl.rows) {
-        return QRect();
-    }
-    cv::Mat crop = screen(cv::Rect(rx, ry, rw, rh)).clone();
-
-    cv::Mat result;
-    cv::matchTemplate(crop, tmpl, result, cv::TM_CCOEFF_NORMED);
-
-    double maxVal;
-    cv::Point maxLoc;
-    cv::minMaxLoc(result, nullptr, &maxVal, nullptr, &maxLoc);
-
-    if (maxVal >= threshold) {
-        // 返回屏幕绝对坐标
-        return QRect(rx + maxLoc.x, ry + maxLoc.y, tmpl.cols, tmpl.rows);
-    }
-    return QRect();
-}
-
-// ════════════════════════════════════════
-// 任务名 → 类型 映射表(写死)
-// 识别到任务名后直接查表,不靠关键字猜
-// ════════════════════════════════════════
 QuestType MainQuestService::questTypeFromName(const QString &name) const
 {
     // 对话任务
@@ -535,34 +382,6 @@ QString MainQuestService::monsterNameFromQuest(const QString &questName) const
     return {};
 }
 
-void MainQuestService::detectGameWindow()
-{
-    HWND hGameWnd = nullptr;
-    HWND hWnd = GetTopWindow(nullptr);
-    while (hWnd) {
-        WCHAR buf[256] = {0};
-        if (GetWindowTextW(hWnd, buf, 255) > 0 && IsWindowVisible(hWnd)) {
-            QString t = QString::fromWCharArray(buf);
-            if (t.contains("大唐无双")) { hGameWnd = hWnd; break; }
-        }
-        hWnd = GetNextWindow(hWnd, GW_HWNDNEXT);
-    }
-    if (hGameWnd) {
-        RECT cr;
-        if (GetClientRect(hGameWnd, &cr)) {
-            POINT pt = {0, 0};
-            ClientToScreen(hGameWnd, &pt);
-            gameOffsetX = pt.x;
-            gameOffsetY = pt.y;
-            questLog(QString("游戏窗口: offset(%1,%2) 客户区:%3x%4")
-                         .arg(gameOffsetX).arg(gameOffsetY)
-                         .arg(cr.right - cr.left).arg(cr.bottom - cr.top));
-        }
-    } else {
-        questLog("⚠ 未找到游戏窗口");
-    }
-}
-
 // ════════════════════════════════════════
 // 主循环
 // ════════════════════════════════════════
@@ -572,6 +391,11 @@ void MainQuestService::run()
     // 在线程启动时初始化(加载ROI、字库等)
     startService();
     while (toRun) {
+        // 后台任务请求暂停时，等待恢复
+        if (m_bgPaused) {
+            QThread::msleep(200);
+            continue;
+        }
         processState();
         QThread::msleep(loopIntervalMs);
     }

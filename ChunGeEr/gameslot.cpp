@@ -1,5 +1,6 @@
 #include "gameslot.h"
 #include "service/baseservice.h"
+#include "service/BackgroundTask/backgroundtaskservice.h"
 #include "gameutils.h"
 #include <QDebug>
 #include <QPixmap>
@@ -157,6 +158,23 @@ void GameSlot::stopService()
         m_service->stopService();
         m_service->deleteLater();
         m_service = nullptr;
+    }
+}
+
+void GameSlot::startBackgroundService()
+{
+    if (m_bgService) return;  // 已在运行
+    m_bgService = new BackgroundTaskService();
+    m_bgService->setAccount(m_account, m_password);
+    m_bgService->start();
+}
+
+void GameSlot::stopBackgroundService()
+{
+    if (m_bgService) {
+        m_bgService->stopService();
+        m_bgService->deleteLater();
+        m_bgService = nullptr;
     }
 }
 

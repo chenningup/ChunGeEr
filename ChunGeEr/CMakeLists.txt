@@ -112,6 +112,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         signalslotconnector.h signalslotconnector.cpp
         service/Record/record.h service/Record/record.cpp
         service/MainQuest/mainquestservice.h service/MainQuest/mainquestservice.cpp
+        service/BackgroundTask/backgroundtaskservice.h service/BackgroundTask/backgroundtaskservice.cpp
         LeoControl/serialportmanager.h LeoControl/serialportmanager.cpp
     )
 target_include_directories(ChunGeEr PRIVATE

@@ -336,6 +336,38 @@ void MainQuestService::questLog(const QString &msg)
     emit SignalSlotConnector::Instance().log(log);
 }
 
+void MainQuestService::moveRandomWASD(int durationMs)
+{
+    // 随机选W/A/S/D之一，按住移动
+    static const int keys[] = { 'w', 'a', 's', 'd' };
+    int k1 = keys[QRandomGenerator::global()->bounded(4)];
+    int k2 = keys[QRandomGenerator::global()->bounded(4)];
+
+    auto &km = MouseKeyboardManager::Instance();
+    km.keyPress(k1);
+    km.keyPress(k2);  // 同时按两个方向（如W+D斜向）
+
+    int elapsed = 0;
+    int step = 200;
+    while (elapsed < durationMs) {
+        QThread::msleep(step);
+        elapsed += step;
+        // 中途随机换方向
+        if (QRandomGenerator::global()->bounded(100) < 20) {
+            km.keyRelease(k1);
+            km.keyRelease(k2);
+            k1 = keys[QRandomGenerator::global()->bounded(4)];
+            k2 = keys[QRandomGenerator::global()->bounded(4)];
+            km.keyPress(k1);
+            km.keyPress(k2);
+        }
+    }
+
+    km.keyRelease(k1);
+    km.keyRelease(k2);
+    questLog(QString("WASD移动完成 (%1秒)").arg(durationMs / 1000));
+}
+
 QuestType MainQuestService::questTypeFromName(const QString &name) const
 {
     // 对话任务
@@ -567,6 +599,7 @@ void MainQuestService::processState()
             questLog("任务已完成,寻找交付人");
             m_delivering = true;
 
+            bool foundDeliver = false;
             if (!results.empty()) {
                 for (const auto &r : results) {
                     if (QString::fromStdString(r.charName) == QStringLiteral("交付人")) {
@@ -577,13 +610,27 @@ void MainQuestService::processState()
                         m_hasPrevMap = false;
                         m_elapsed.restart();
                         transitionTo(MainQuestState::WaitAutoPath);
+                        foundDeliver = true;
                         break;
                     }
                 }
+            }
+
+            if (!foundDeliver) {
+                // 没找到任务名/交付人 → WASD移动5秒改变视角后重试
+                if (m_wasdRetry < 3) {
+                    m_wasdRetry++;
+                    questLog(QString("未找到交付人/任务名, WASD移动5秒 (第%1次)").arg(m_wasdRetry));
+                    moveRandomWASD(5000);
+                    transitionTo(MainQuestState::ReadQuestTrack);
+                } else {
+                    m_wasdRetry = 0;
+                    questLog("WASD重试3次仍失败,跳过");
+                    QThread::msleep(2000);
+                    transitionTo(MainQuestState::ReadQuestTrack);
+                }
             } else {
-                questLog("未识别到任务名,无法寻路");
-                QThread::msleep(2000);
-                transitionTo(MainQuestState::ReadQuestTrack);
+                m_wasdRetry = 0;
             }
         }
         break;
@@ -635,10 +682,61 @@ void MainQuestService::processState()
     case MainQuestState::DetectTaskType:
     {
         if (currentQuestType == QuestType::UseItem) {
-            // ═══ 熟悉药品 ═══
-            questLog("▶ 熟悉药品");
-            // TODO: 具体操作流程待确认
+            // ═══ 使用物品（熟悉药品等）═══
+            questLog("▶ 使用物品");
+
+            cv::Mat frame = screenToMat();
+            if (frame.empty()) {
+                questLog("截图失败,重试");
+                randSleep(1500, 2500);
+                break;
+            }
+
+            // 搜索"确定"按钮（BFL文字识别，只搜"确定"不遍历全部字库）
+            bool clicked = false;
+            if (!BitmapFontLib::Instance().isEmpty()) {
+                auto matches = BitmapFontLib::Instance().findText(frame, "确定", 0.85);
+                if (!matches.empty()) {
+                    const auto &m = matches[0];
+                    int cx = m.x + m.width / 2;
+                    int cy = m.y + m.height / 2;
+                    questLog(QString("点击确定 (%1,%2) sim=%3")
+                                 .arg(cx).arg(cy)
+                                 .arg(m.similarity, 0, 'f', 3));
+                    clickAt(cx, cy);
+                    clicked = true;
+                }
+            }
+
+            if (!clicked) {
+                questLog("未找到确定按钮");
+            }
+
+            // 在背包中找"精钢剑"图片，右键装备
             QThread::msleep(1000);
+            questLog("寻找精钢剑");
+            {
+                QRect itemRect = findTemplate("items/精钢剑", 0.75);
+                if (!itemRect.isNull()) {
+                    int cx = itemRect.center().x();
+                    int cy = itemRect.center().y();
+                    questLog(QString("精钢剑 at (%1,%2) → 右键装备")
+                                 .arg(cx).arg(cy));
+                    MouseKeyboardManager::Instance().mouseMoveDirect(cx, cy);
+                    QThread::msleep(200);
+                    MouseKeyboardManager::Instance().mouseRightClick();
+                    QThread::msleep(500);
+                } else {
+                    questLog("未找到精钢剑图片");
+                }
+            }
+
+            // 按B关闭背包
+            QThread::msleep(500);
+            questLog("按B关闭背包");
+            MouseKeyboardManager::Instance().clickButton('b');
+            QThread::msleep(500);
+
             transitionTo(MainQuestState::ReadQuestTrack);
         }
         else if (currentQuestType == QuestType::Kill) {
@@ -732,12 +830,22 @@ void MainQuestService::processState()
             // ═══ 对话任务 ═══
             questLog("▶ 对话任务");
 
+            // 在对话框ROI区域内找"取消"按钮（config.ini可配 DialogBtn ROI）
+            QRect dialogROI = offsetROI(dialogBtnRoi);
+
             // 等待对话框出现（检测取消按钮）
             bool dialogFound = false;
             for (int i = 0; i < 20; i++) {
                 QThread::msleep(500);
                 if (!toRun) return;
-                QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+                // 在dialogROI区域内搜索
+                QRect cropRoi = dialogROI.isValid() ? dialogROI : QRect(0, 0, 0, 0);
+                QRect cancelRect;
+                if (!cropRoi.isEmpty()) {
+                    cancelRect = findTemplateInROI("popups/取消", 0.80, cropRoi);
+                } else {
+                    cancelRect = findTemplate("popups/取消", 0.80);
+                }
                 if (!cancelRect.isNull()) {
                     dialogFound = true;
                     break;
@@ -746,10 +854,16 @@ void MainQuestService::processState()
 
             if (!dialogFound) {
                 questLog("⚠ 无对话框,尝试点击NPC");
-                QRect npcRoi = offsetROI(QRect(400, 300, 240, 200));
-                clickAt(npcRoi.center().x(), npcRoi.center().y());
+                int cx = dialogROI.isValid() ? dialogROI.center().x() : 520;
+                int cy = dialogROI.isValid() ? dialogROI.center().y() : 400;
+                clickAt(cx, cy);
                 QThread::msleep(1500);
-                QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+                QRect cancelRect;
+                if (!dialogROI.isEmpty()) {
+                    cancelRect = findTemplateInROI("popups/取消", 0.80, dialogROI);
+                } else {
+                    cancelRect = findTemplate("popups/取消", 0.80);
+                }
                 if (cancelRect.isNull()) {
                     questLog("仍无对话框,回到任务追踪重试");
                     transitionTo(MainQuestState::ReadQuestTrack);
@@ -760,7 +874,13 @@ void MainQuestService::processState()
             // 循环对话：第一轮点拜见小师姑，后续点对话
             int dialogRounds = 0;
             while (toRun) {
-                QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+                // 在dialogROI区域内找取消按钮
+                QRect cancelRect;
+                if (!dialogROI.isEmpty()) {
+                    cancelRect = findTemplateInROI("popups/取消", 0.80, dialogROI);
+                } else {
+                    cancelRect = findTemplate("popups/取消", 0.80);
+                }
                 if (cancelRect.isNull()) {
                     questLog("✅ 对话框消失,对话结束");
                     break;
@@ -769,27 +889,27 @@ void MainQuestService::processState()
                 dialogRounds++;
                 questLog(QString("对话第 %1 轮").arg(dialogRounds));
 
-                // 在取消按钮上方区域找对话按钮
-                int searchTop = qMax(0, cancelRect.y() - 800);
-                int searchHeight = cancelRect.y() - searchTop;
-                QRect searchArea(cancelRect.x() - 50, searchTop,
-                                 cancelRect.width() + 100, searchHeight);
-
+                questLog("find duihua");
                 // 按任务名+轮次选按钮图
                 QString btnImage;
                 if (m_currentQuestName.contains("拜见宁婉儿")) {
                     if (dialogRounds == 1) {
-                        btnImage = "popups/拜见小师姑.png";
+                        btnImage = "popups/拜见小师姑";
                     } else {
-                        btnImage = "popups/对话.png";
+                        btnImage = "popups/对话";
                     }
                 } else {
-                    btnImage = "popups/对话.png";
+                    btnImage = "popups/对话";
                 }
 
                 bool clicked = false;
                 if (!btnImage.isEmpty()) {
-                    QRect btnRect = findTemplateInROI(btnImage, 0.80, searchArea);
+                    QRect btnRect;
+                    if (!dialogROI.isEmpty()) {
+                        btnRect = findTemplateInROI(btnImage, 0.80, dialogROI);
+                    } else {
+                        btnRect = findTemplate(btnImage, 0.80);
+                    }
                     if (!btnRect.isNull()) {
                         questLog(QString("找到对话按钮: %1 at (%2,%3)")
                                      .arg(btnImage)
@@ -799,8 +919,15 @@ void MainQuestService::processState()
                         randSleep(500, 1000);
                         clicked = true;
                     }
+                    else
+                    {
+                        questLog("btnRect is null");
+                    }
                 }
-
+                else
+                {
+                    questLog("btnImage is empty");
+                }
                 if (!clicked) {
                     questLog(QString("⚠ 未找到对话按钮(%1),等待重试").arg(btnImage));
                 }
@@ -819,12 +946,19 @@ void MainQuestService::processState()
     {
         questLog("▶ 对话交付");
 
-        // 1. 等待弹窗出现（最多等15秒）
+        QRect dialogROI = offsetROI(dialogBtnRoi);
+
+        // 1. 等待弹窗出现（最多等15秒，在dialogROI内搜索）
         bool popupFound = false;
         for (int i = 0; i < 30; i++) {
             QThread::msleep(500);
             if (!toRun) return;
-            QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+            QRect cancelRect;
+            if (!dialogROI.isEmpty()) {
+                cancelRect = findTemplateInROI("popups/取消", 0.80, dialogROI);
+            } else {
+                cancelRect = findTemplate("popups/取消", 0.80);
+            }
             if (!cancelRect.isNull()) {
                 questLog("检测到交付弹窗（取消按钮）");
                 popupFound = true;
@@ -844,11 +978,16 @@ void MainQuestService::processState()
         }
         retryCount = 0;
 
-        // 2. 循环：在取消按钮上方找对话按钮→点击→等→再检测，直到弹窗消失
+        // 2. 循环：在dialogROI内找对话按钮→点击→等→再检测，直到弹窗消失
         int dialogRounds = 0;
         while (toRun) {
-            // 再确认弹窗还在
-            QRect cancelRect = findTemplate("popups/取消.png", 0.80);
+            // 再确认弹窗还在（在dialogROI内搜索取消按钮）
+            QRect cancelRect;
+            if (!dialogROI.isEmpty()) {
+                cancelRect = findTemplateInROI("popups/取消", 0.80, dialogROI);
+            } else {
+                cancelRect = findTemplate("popups/取消", 0.80);
+            }
             if (cancelRect.isNull()) {
                 questLog("✅ 弹窗已消失，交付完成");
                 break;
@@ -857,48 +996,46 @@ void MainQuestService::processState()
             dialogRounds++;
             questLog(QString("对话第 %1 轮").arg(dialogRounds));
 
-            // 在取消按钮上方区域找对话按钮
-            // 取消按钮中心向上偏移区域作为搜索范围
-            int searchTop = qMax(0, cancelRect.y() - 800);
-            int searchHeight = cancelRect.y() - searchTop;
-            QRect searchArea(cancelRect.x() - 50, searchTop,
-                             cancelRect.width() + 100, searchHeight);
-
             // 按任务名找对应按钮图
             QString btnImage;
             if (m_currentQuestName.contains("拜见宁婉儿"))
             {
                 if(dialogRounds == 1)
                 {
-                    btnImage = "popups/拜见小师姑.png";
+                    btnImage = "popups/拜见小师姑";
                 }
                 else
                 {
-                    btnImage = "popups/对话.png";
+                    btnImage = "popups/对话";
                 }
             }
             else
             {
-                btnImage = "popups/对话.png";
+                btnImage = "popups/对话";
             }
             // 后续任务按钮图在这里加 elif
 
             bool clicked = false;
 
             if (!btnImage.isEmpty()) {
-                QRect btnRect = findTemplateInROI(btnImage, 0.80, searchArea);
+                QRect btnRect;
+                if (!dialogROI.isEmpty()) {
+                    btnRect = findTemplateInROI(btnImage, 0.80, dialogROI);
+                } else {
+                    btnRect = findTemplate(btnImage, 0.80);
+                }
                 if (!btnRect.isNull()) {
                     questLog(QString("找到对话按钮: %1 at (%2,%3)")
                                  .arg(btnImage)
                                  .arg(btnRect.center().x())
                                  .arg(btnRect.center().y()));
                     clickCenter(btnRect);
-                    randSleep(500, 1000);
+                    randSleep(200, 500);
                     clicked = true;
                 }
             }
 
-            randSleep(1200, 2000);
+            randSleep(200, 500);
         }
 
         transitionTo(MainQuestState::Done);

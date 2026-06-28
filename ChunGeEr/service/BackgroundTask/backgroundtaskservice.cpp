@@ -137,7 +137,7 @@ bool BackgroundTaskService::checkLoginReward()
 
     // 方案2: 模板图片查找
     if (!found) {
-        QRect tmpl = findTemplate("popups/领取.png", 0.80);
+        QRect tmpl = findTemplate("popups/领取", 0.80);
         if (!tmpl.isNull()) {
             matchRect = tmpl;
             found = true;
@@ -412,6 +412,25 @@ bool BackgroundTaskService::checkDisconnect()
 
     if (reconnected) {
         bgLog("✅ 重连成功！");
+
+        // ── 步骤9: 关闭活动弹窗 ──
+        QThread::msleep(3000);  // 等游戏画面稳定
+        for (int i = 0; i < 3; i++) {
+            QRect actRect = findTemplate("popups/展开的活动", 0.75);
+            if (!actRect.isNull()) {
+                bgLog(QString("关闭活动弹窗 (%1,%2)")
+                          .arg(actRect.center().x()).arg(actRect.center().y()));
+                clickAt(actRect.center().x(), actRect.center().y());
+                QThread::msleep(1000);
+            } else {
+                break;
+            }
+        }
+
+        // ── 步骤10: 按F11屏蔽其他玩家 ──
+        bgLog("按F11屏蔽其他玩家");
+        MouseKeyboardManager::Instance().clickButton(KEY_F11);
+        QThread::msleep(500);
     } else {
         bgLog("⚠ 重连结果不确定，恢复任务运行");
     }

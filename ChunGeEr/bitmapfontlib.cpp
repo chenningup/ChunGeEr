@@ -603,6 +603,71 @@ std::vector<BflFindResult> BitmapFontLib::findString(const cv::Mat &image, doubl
     return nms;
 }
 
+std::vector<BflFindResult> BitmapFontLib::findText(const cv::Mat &image, const std::string &text, double sim) const
+{
+    QMutexLocker lock(&m_findMutex);
+    std::vector<BflFindResult> results;
+    if (image.empty() || m_glyphs.isEmpty() || text.empty()) return results;
+
+    int imgW = image.cols, imgH = image.rows;
+
+    // 只遍历名称包含text的字符（比findString遍历全部字符快得多）
+    for (auto it = m_glyphs.begin(); it != m_glyphs.end(); ++it) {
+        const std::string &charName = it.key().toStdString();
+        if (charName.find(text) == std::string::npos) continue;  // 名称不匹配，跳过
+
+        for (const BflGlyph &g : it.value()) {
+            if (g.width > imgW || g.height > imgH) continue;
+
+            // 用字形独立颜色binarize；没有则用全局
+            const BflColorFilter &cf = g.colorFilter.isEmpty() ? m_colorFilter : g.colorFilter;
+            cv::Mat bin = binarizeWith(image, cf);
+
+            if (bin.empty()) continue;
+
+            int maxX = imgW - g.width;
+            int maxY = imgH - g.height;
+            for (int y = 0; y <= maxY; y++) {
+                for (int x = 0; x <= maxX; x++) {
+                    cv::Rect roi(x, y, g.width, g.height);
+                    std::string windowHex = matToHex(bin(roi));
+                    double score = compareBits(windowHex, g.hexBits);
+
+                    if (score >= sim) {
+                        results.push_back({charName, x, y, g.width, g.height, score});
+                    }
+                }
+            }
+        }
+    }
+
+    // NMS去重
+    std::sort(results.begin(), results.end(),
+        [](const BflFindResult &a, const BflFindResult &b) { return a.similarity > b.similarity; });
+    std::vector<BflFindResult> nms;
+    std::vector<bool> suppressed(results.size(), false);
+    for (size_t i = 0; i < results.size(); i++) {
+        if (suppressed[i]) continue;
+        nms.push_back(results[i]);
+        for (size_t j = i + 1; j < results.size(); j++) {
+            if (suppressed[j]) continue;
+            if (results[i].charName != results[j].charName) continue;
+            int x1 = std::max(results[i].x, results[j].x);
+            int y1 = std::max(results[i].y, results[j].y);
+            int x2 = std::min(results[i].x + results[i].width, results[j].x + results[j].width);
+            int y2 = std::min(results[i].y + results[i].height, results[j].y + results[j].height);
+            if (x2 <= x1 || y2 <= y1) continue;
+            int intersect = (x2 - x1) * (y2 - y1);
+            int areaI = results[i].width * results[i].height;
+            int areaJ = results[j].width * results[j].height;
+            double iou = (double)intersect / (areaI + areaJ - intersect);
+            if (iou > 0.5) suppressed[j] = true;
+        }
+    }
+    return nms;
+}
+
+
 std::vector<BflFindResult> BitmapFontLib::findChar(const std::string &charName, const cv::Mat &image, double sim) const
 {
     std::vector<BflFindResult> results;

@@ -143,6 +143,10 @@ public:
     /// ⚠ 线程安全：内部用 QMutexLocker 保护
     std::vector<BflFindResult> findString(const cv::Mat &image, double sim = 0.9) const;
 
+    /// 在彩色图像中查找指定文字（只搜名称包含text的字符，比findString快）
+    /// text: 要查找的文字（如"确定"、"服务器断开连接"），匹配charName包含text的字符
+    std::vector<BflFindResult> findText(const cv::Mat &image, const std::string &text, double sim = 0.9) const;
+
     /// 在彩色图像中查找指定名称的字符
     std::vector<BflFindResult> findChar(const std::string &charName, const cv::Mat &image, double sim = 0.9) const;
 

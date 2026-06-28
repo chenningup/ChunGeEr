@@ -158,13 +158,13 @@ void MouseKeyboardManager::clickButton(const QString &button)
 void MouseKeyboardManager::clickButton(int button)
 {
     keyPress(button);
-    QThread::msleep(200);
+    QThread::msleep(getRandomInRange(150, 280));
     keyRelease(button);
 }
 
 void MouseKeyboardManager::humanMouseMove(int endX, int endY)
 {
-    QThread::msleep(100);
+    QThread::msleep(getRandomInRange(50, 150));
     QPoint current = QCursor::pos();
     double distance = sqrt(pow(endX - current.x(), 2) + pow(endY - current.y(), 2));
     int steps = static_cast<int>(distance * 0.30); // 减少步数比例提高速度
@@ -263,7 +263,7 @@ void MouseKeyboardManager::mouseMoveDirect(int x, int y)
     }
     current = QCursor::pos();
     QDateTime end = QDateTime::currentDateTime();
-    infof("mouseMoveDirect leave,cost:{},cursor pos,x:{},y:{}",start.msecsTo(end),current.x(),current.y());
+    //infof("mouseMoveDirect leave,cost:{},cursor pos,x:{},y:{}",start.msecsTo(end),current.x(),current.y());
 }
 
 void MouseKeyboardManager::mousePress(int type)
@@ -383,7 +383,7 @@ int MouseKeyboardManager::createPacket(char *dist, char *data, int datasize)
 void MouseKeyboardManager::mouseClick()
 {
     mousePress(MOUSE_LEFT);
-    QThread::msleep(200);
+    QThread::msleep(getRandomInRange(100, 200));
     mouseRelease(MOUSE_LEFT);
 }
 
@@ -406,6 +406,6 @@ void MouseKeyboardManager::mouseDoubleClick()
 void MouseKeyboardManager::mouseRightClick()
 {
     mousePress(MOUSE_RIGHT);
-    QThread::msleep(200);
+    QThread::msleep(getRandomInRange(100, 200));
     mouseRelease(MOUSE_RIGHT);
 }

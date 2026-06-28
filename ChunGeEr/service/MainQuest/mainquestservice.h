@@ -72,6 +72,9 @@ private:
     // ── 日志 ──
     void questLog(const QString &msg);
 
+    // WASD随机移动（改变视角/位置，用于找不到任务名/交付人时重试）
+    void moveRandomWASD(int durationMs);
+
     friend class BackgroundTaskService;
 
     MainQuestState currentState = MainQuestState::Idle;
@@ -79,6 +82,7 @@ private:
     QString m_currentQuestName;
 
     int retryCount = 0;
+    int m_wasdRetry = 0;     // WASD移动重试计数（找不到任务名/交付人时）
     static const int MAX_RETRIES = 6;
 
     // 时间参数

@@ -1,4 +1,4 @@
-#include "baseservice.h"
+﻿#include "baseservice.h"
 #include "../KeyboardListener/keyboardlistener.h"
 #include "../LeoControl/mousekeyboardmanager.h"
 #include <windows.h>
@@ -199,10 +199,17 @@ void BaseService::randSleep(int minMs, int maxMs)
 QRect BaseService::findTemplate(const QString &name, double threshold)
 {
     cv::Mat screen = screenToMat();
-    if (screen.empty()) return {};
+    if (screen.empty()) {
+        infof("findTemplate {} screen empty", name.toStdString());
+        return {};
+    }
 
-    cv::Mat tmpl = imreadUnicode(m_templateRoot + name + ".png");
-    if (tmpl.empty()) return {};
+    QString fullPath = m_templateRoot + name + ".png";
+    cv::Mat tmpl = imreadUnicode(fullPath);
+    if (tmpl.empty()) {
+        infof("findTemplate {} template not found: {}", name.toStdString(), fullPath.toStdString());
+        return {};
+    }
 
     cv::Mat result;
     cv::matchTemplate(screen, tmpl, result, cv::TM_CCOEFF_NORMED);
@@ -211,8 +218,12 @@ QRect BaseService::findTemplate(const QString &name, double threshold)
     cv::minMaxLoc(result, nullptr, &maxVal, nullptr, &maxLoc);
 
     if (maxVal >= threshold) {
+        infof("findTemplate {} matched conf={:.3f} at({},{})", 
+              name.toStdString(), maxVal, maxLoc.x, maxLoc.y);
         return QRect(maxLoc.x, maxLoc.y, tmpl.cols, tmpl.rows);
     }
+    infof("findTemplate {} FAIL conf={:.3f} < threshold={:.2f} tmpl={}x{} screen={}x{}",
+          name.toStdString(), maxVal, threshold, tmpl.cols, tmpl.rows, screen.cols, screen.rows);
     return {};
 }
 

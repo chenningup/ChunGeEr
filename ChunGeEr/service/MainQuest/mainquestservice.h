@@ -33,6 +33,7 @@ enum class QuestType {
     Talk,       // 对话任务
     Kill,       // 杀怪任务
     UseItem,    // 熟悉药品
+    LearnSkill, // 学习技能
 };
 
 class MainQuestService : public BaseService
@@ -101,6 +102,22 @@ private:
 
     QuestType questTypeFromName(const QString &name) const;
     QString monsterNameFromQuest(const QString &questName) const;
+
+    // ── 学习技能：门派→技能图映射 ──
+    // 每个门派可以有多张技能图（按顺序尝试匹配+升级）
+    // 图片放在 images/skills/ 目录下
+    struct SkillLearnEntry {
+        QString school;           // 门派名（如 "蜀山" "昆仑"）
+        QStringList skillImages;  // 技能图片名（如 "琴心三叠" "剑气长江"）
+
+        SkillLearnEntry() = default;
+        SkillLearnEntry(const QString &s, const QStringList &imgs)
+            : school(s), skillImages(imgs) {}
+    };
+    QList<SkillLearnEntry> m_skillTable;
+    QString m_lastSchool;      // 当前账号门派（缓存，首次匹配后记住）
+    void initSkillTable();     // 初始化门派技能映射表
+    QStringList skillsForQuest(const QString &questName) const;  // 任务名→技能图列表
 
     // 字库
     bool   m_fontLoaded = false;

@@ -1,4 +1,4 @@
-#ifndef BASESERVICE_H
+﻿#ifndef BASESERVICE_H
 #define BASESERVICE_H
 
 #include <QThread>
@@ -10,7 +10,7 @@
 #include "../bitmapfontlib.h"
 #include <opencv2/opencv.hpp>
 #include <QMutex>
-#include "../signalslotconnector.h"
+#include "../signalslotconnector.h"`r`n#include "XuLog.h"
 
 enum NameColor {
     NAME_RED,

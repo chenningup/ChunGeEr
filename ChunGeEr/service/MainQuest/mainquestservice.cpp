@@ -1,8 +1,8 @@
-#include "mainquestservice.h"
+﻿#include "mainquestservice.h"
 #include "../../LeoControl/mousekeyboardmanager.h"
 #include "../../signalslotconnector.h"
 #include "XuLog.h"
-#include <QThread>
+#include <QThread>`r`n#include <QRandomGenerator>
 #include <QSettings>
 #include <QCoreApplication>
 #include <windows.h>
@@ -13,6 +13,7 @@ MainQuestService::MainQuestService(QObject *parent) : BaseService(parent) {}
 void MainQuestService::startService()
 {
     questLog("主线任务服务启动");
+    initSkillTable();
 
     // 从 config.ini 加载 ROI
     QString iniPath = QCoreApplication::applicationDirPath() + "/config.ini";
@@ -384,6 +385,10 @@ QuestType MainQuestService::questTypeFromName(const QString &name) const
         "主线熟悉药品",
     };
 
+    static const QStringList learnSkill = {
+        "主线门派的技能",
+    };
+
     for (const auto &q : talkQuests) {
         if (name.contains(q)) return QuestType::Talk;
     }
@@ -393,6 +398,10 @@ QuestType MainQuestService::questTypeFromName(const QString &name) const
     for (const auto &q : useItemQuests) {
         if (name.contains(q)) return QuestType::UseItem;
     }
+    for (const auto &q : learnSkill) {
+        if (name.contains(q)) return QuestType::LearnSkill;
+    }
+
     return QuestType::Unknown;
 }
 
@@ -412,6 +421,30 @@ QString MainQuestService::monsterNameFromQuest(const QString &questName) const
         }
     }
     return {};
+}
+
+void MainQuestService::initSkillTable()
+{
+    m_skillTable.clear();
+    // 格式：{ "门派名", { "技能图1", "技能图2", ... } }
+    // 图片路径: images/skills/<图片名>.png
+    m_skillTable.append(SkillLearnEntry("蜀山", {"升级琴心三叠", "剑气长江", "天剑绝踪"}));
+    m_skillTable.append(SkillLearnEntry("昆仑", {"玄冰弹", "烈焰风暴", "雷云电击"}));
+    m_skillTable.append(SkillLearnEntry("百花", {"治疗术", "妙手回春", "蜂群突袭"}));
+    m_skillTable.append(SkillLearnEntry("少林", {"金钟罩", "罗汉拳", "大力金刚掌"}));
+    m_skillTable.append(SkillLearnEntry("通用", {"升级琴心三叠"}));  // fallback
+}
+
+QStringList MainQuestService::skillsForQuest(const QString &questName) const
+{
+    for (const SkillLearnEntry &e : m_skillTable) {
+        // 任务名包含门派名 → 返回该门派技能列表
+        if (questName.contains(e.school) || e.school == "通用") {
+            return e.skillImages;
+        }
+    }
+    // fallback: 返回通用列表
+    return { "升级琴心三叠" };
 }
 
 // ════════════════════════════════════════
@@ -506,6 +539,8 @@ void MainQuestService::processState()
             questLog("任务类型:杀怪");
         } else if (currentQuestType == QuestType::UseItem) {
             questLog("任务类型:熟悉药品");
+        } else if (currentQuestType == QuestType::LearnSkill) {
+            questLog("任务类型:LearnSkill");
         } else {
             questLog("任务类型:未知");
         }
@@ -736,6 +771,140 @@ void MainQuestService::processState()
             questLog("按B关闭背包");
             MouseKeyboardManager::Instance().clickButton('b');
             QThread::msleep(500);
+
+            transitionTo(MainQuestState::ReadQuestTrack);
+        }
+        else if (currentQuestType == QuestType::LearnSkill) {
+            // ═══ 学习技能 ═══
+            questLog("▶ 学习技能");
+
+            // 1. 按 K 打开技能窗口
+            questLog("按K打开技能窗口");
+            MouseKeyboardManager::Instance().clickButton('k');
+            QThread::msleep(2000);
+
+            // 2. 截图确认技能窗口已打开（找“天赋技能”或“生活技能”）
+            cv::Mat frame = screenToMat();
+            if (frame.empty()) {
+                questLog("截图失败,重试");
+                randSleep(1500, 2500);
+                break;
+            }
+
+            bool skillWindowOpen = false;
+            QRect talentRect = findTemplate("popups/天赋技能", 0.75);
+            if (!talentRect.isNull()) {
+                skillWindowOpen = true;
+                questLog("检测到天赋技能标签");
+            }
+            if (!skillWindowOpen) {
+                QRect lifeRect = findTemplate("popups/生活技能", 0.75);
+                if (!lifeRect.isNull()) {
+                    skillWindowOpen = true;
+                    questLog("检测到生活技能标签");
+                }
+            }
+
+            if (!skillWindowOpen) {
+                questLog("⚠ 技能窗口未打开,再按一次K");
+                MouseKeyboardManager::Instance().clickButton('k');
+                QThread::msleep(2000);
+                frame = screenToMat();
+                if (!frame.empty()) {
+                    talentRect = findTemplate("popups/天赋技能", 0.75);
+                    if (!talentRect.isNull()) {
+                        skillWindowOpen = true;
+                    } else {
+                        QRect lifeRect = findTemplate("popups/生活技能", 0.75);
+                        if (!lifeRect.isNull()) skillWindowOpen = true;
+                    }
+                }
+            }
+
+            if (!skillWindowOpen) {
+                questLog("❌ 技能窗口仍未打开,放弃");
+                // 按 ESC 关闭可能打开的窗口
+                MouseKeyboardManager::Instance().clickButton(KEY_ESC);
+                QThread::msleep(500);
+                transitionTo(MainQuestState::ReadQuestTrack);
+                break;
+            }
+
+            // 3. 获取当前任务应学的技能图列表
+            QStringList skillImgs = skillsForQuest(m_currentQuestName);
+            questLog(QString("任务[%1] 需学技能: %2")
+                         .arg(m_currentQuestName)
+                         .arg(skillImgs.join(", ")));
+
+            // 4. 逐个找技能图 → 右键 → 点确认
+            for (const QString &skillName : skillImgs) {
+                QString tplPath = "skills/" + skillName;
+                questLog(QString("寻找技能图: %1").arg(tplPath));
+
+                QRect skillRect = findTemplate(tplPath, 0.75);
+                if (skillRect.isNull()) {
+                    questLog(QString("未找到%1,跳过").arg(skillName));
+                    continue;
+                }
+
+                int cx = skillRect.center().x();
+                int cy = skillRect.center().y();
+                questLog(QString("找到%1 at (%2,%3) → 右键点击")
+                             .arg(skillName).arg(cx).arg(cy));
+
+                // 右键点击技能图标
+                MouseKeyboardManager::Instance().mouseMoveDirect(cx, cy);
+                QThread::msleep(300);
+                MouseKeyboardManager::Instance().mouseRightClick();
+                randSleep(500, 800);
+
+                // 右键后鼠标移开，避免悬停干扰弹窗
+                int offsetX = cx + 100 + (QRandomGenerator::global()->bounded(101));  // +100~200px
+                int offsetY = cy + QRandomGenerator::global()->bounded(101) - 50;    // -50~+50px
+                MouseKeyboardManager::Instance().mouseMoveDirect(offsetX, offsetY);
+                randSleep(300, 500);
+
+                // 5. 检测确认弹窗 → 点击确认
+                bool confirmed = false;
+                for (int attempt = 0; attempt < 10; attempt++) {
+                    QThread::msleep(500);
+                    cv::Mat popup = screenToMat();
+                    if (popup.empty()){
+                        questLog("popup empty ");
+                        continue;
+                    }
+
+                    //模板图片
+                    QRect confirmRect = findTemplate("popups/确定按钮", 0.75);
+                    if (!confirmRect.isNull()) {
+                        questLog(QString("模板匹配到确认 at (%1,%2)")
+                                     .arg(confirmRect.center().x())
+                                     .arg(confirmRect.center().y()));
+                        clickAt(confirmRect.center().x(), confirmRect.center().y());
+                        confirmed = true;
+                        break;
+                    }
+                    else{
+                        questLog("not found ");
+                    }
+                }
+
+                if (!confirmed) {
+                    questLog(QString("⚠ %1 未出现确认弹窗,跳过").arg(skillName));
+                    // 按 ESC 关闭可能打开的右键菜单
+                    MouseKeyboardManager::Instance().clickButton(KEY_ESC);
+                    QThread::msleep(500);
+                } else {
+                    questLog(QString("✅ %1 学习完成").arg(skillName));
+                    QThread::msleep(1500);
+                }
+            }
+
+            // 6. 按 K 或 ESC 关闭技能窗口
+            QThread::msleep(500);
+            questLog("关闭技能窗口");
+            MouseKeyboardManager::Instance().clickButton('k');
+            QThread::msleep(800);
 
             transitionTo(MainQuestState::ReadQuestTrack);
         }
